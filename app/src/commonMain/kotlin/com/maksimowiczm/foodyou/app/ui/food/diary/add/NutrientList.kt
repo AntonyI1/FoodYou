@@ -33,9 +33,15 @@ internal fun NutrientList(
     onEditFood: (FoodId) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // This is stupid that it is here but it's going to be deleted in 4.0.0
     val facts =
         remember(food, measurement) {
-            val weight = food.weight(measurement)
+            val weight =
+                try {
+                    food.weight(measurement)
+                } catch (_: IllegalStateException) {
+                    100.0
+                }
             food.nutritionFacts * (weight / 100)
         }
 

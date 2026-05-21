@@ -280,8 +280,20 @@ private fun AddEntryScreen(
 
             if (food is RecipeModel) {
                 item {
-                    val measurement = state.measurementState.measurement
-                    val ingredients = food.unpack(food.weight(measurement))
+                    // This is stupid that it is here but it's going to be deleted in 4.0.0
+                    val ingredients =
+                        remember(state.measurementState.measurement, food) {
+                            val realMeasurement = state.measurementState.measurement
+
+                            val weight =
+                                try {
+                                    food.weight(realMeasurement)
+                                } catch (_: IllegalStateException) {
+                                    100.0
+                                }
+
+                            food.unpack(weight)
+                        }
 
                     HorizontalDivider(Modifier.padding(horizontal = 8.dp))
                     Ingredients(
