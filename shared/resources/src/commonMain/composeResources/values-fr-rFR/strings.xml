@@ -14,7 +14,7 @@
     <string name="headline_system">Système</string>
     <string name="headline_system_language_settings">Paramètres de la langue du système</string>
     <string name="headline_secure_screen">Écran sécurisé</string>
-    <string name="headline_about">A propos</string>
+    <string name="headline_about">À propos</string>
     <string name="headline_version">Version</string>
     <string name="headline_all_day" description="All-day (meal)">Toute la journée</string>
     <string name="headline_time_based_ordering">Commande basée sur le temps</string>
@@ -43,7 +43,7 @@
     <string name="headline_api_key">Clé API</string>
     <string name="headline_source" description="Source of the food product, e.g. Open Food Facts, USDA, Swiss Food Composition Database">Source</string>
     <string name="headline_features">Fonctionnalités</string>
-    <string name="weight">Poids</string>
+    <string name="weight">Masse</string>
     <string name="unit_energy" description="Energy as calories">Énergie</string>
     <string name="unit_kcal">kcal</string>
     <string name="unit_kilojoules">kJ</string>

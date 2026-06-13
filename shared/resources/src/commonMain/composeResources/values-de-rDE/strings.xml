@@ -43,96 +43,6 @@
     <string name="headline_api_key">API Schlüssel</string>
     <string name="headline_source" description="Source of the food product, e.g. Open Food Facts, USDA, Swiss Food Composition Database">Quelle</string>
     <string name="headline_features">Funktionen</string>
-    <string name="headline_recent">Zuletzt verwendet</string>
-    <string name="headline_today" description="Today, date">Heute, %1$s</string>
-    <string name="headline_yesterday" description="Yesterday, date">Gestern, %1$s</string>
-    <string name="headline_tomorrow" description="Tomorrow, date">Morgen, %1$s</string>
-    <string name="headline_your_food">Deine Lebensmittel</string>
-
-    <string name="headline_personalization">Personalisierung</string>
-    <string name="description_personalization">App an deine Vorstellungen anpassen</string>
-
-    <string name="headline_nutrition_facts">Nährwertangaben</string>
-    <string name="description_personalize_nutrition_facts_short">Reihenfolge der Nährwertangaben ändern</string>
-    <string name="action_reset_ordering">Reihenfolge zurücksetzen</string>
-    <string name="headline_reset_to_default">Auf Standardwerte zurücksetzen</string>
-    <string name="description_reset_nutrition_facts">Personalisierung der Nährwertangaben zurücksetzen</string>
-    <string name="action_reset" description="Confirm resetting">Zurücksetzen</string>
-
-    <string name="headline_energy_unit">Energieeinheit</string>
-    <string name="description_energy_unit">Wähle die bevorzugte Energieeinheit aus</string>
-
-    <string name="headline_colors">Farben</string>
-    <string name="description_colors">Farben der App anpassen</string>
-
-    <string name="headline_pick_the_days">Tage auswählen</string>
-    <string name="action_set_separate_goals">Setze separate Ziele für jeden Tag</string>
-    <string name="headline_percentages">Prozentsätze</string>
-
-    <string name="headline_data_backup_and_export">Daten-Import/Export</string>
-    <string name="headline_database">Datenbank</string>
-    <string name="description_manage_database">Verwaltung der Datenbank</string>
-    <string name="headline_external_databases">Externe Datenbanken</string>
-    <string name="description_external_databases">Probiere unterstützte Datenbanken aus</string>
-    <string name="headline_food_database">Lebensmitteldatenbank</string>
-    <string name="description_food_database">Wähle, ob du eine der folgenden externen Dienste nutzen möchtest, welche ihre eigenen Nutzungsbedingungen und Datenschutzbestimmungen haben können</string>
-    <string name="headline_terms_of_use">Nutzungsbedingungen</string>
-    <string name="headline_privacy_policy">Datenschutzbestimmungen</string>
-    <string name="action_skip">Überspringen</string>
-
-    <string name="action_import_csv_food_products">Import aus CSV-Datei</string>
-    <string name="description_import_csv_food_products">Lebensmittel aus CSV-Datei importieren</string>
-    <string name="description_import_csv_food_products_hint">Wir müssen nur wissen, was was ist. Zeige uns, welche Spalte in deiner Datei der Produktname, die Marke usw. ist.</string>
-    <string name="description_import_csv_food_products_hint_2">Alle Nährwerte müssen in Gramm oder Kcal pro 100 g angegeben werden</string>
-    <string name="action_export_csv_food_products">Export in CSV-Datei</string>
-    <string name="description_export_csv_food_products">Lebensmittel in CSV-Datei exportieren</string>
-    <string name="headline_database_backup">Sicherung der Datenbank</string>
-    <string name="headline_experimental">Experimentell</string>
-
-    <string name="headline_save_database">Datenbank sichern</string>
-    <string name="description_save_database">Sichere eine Kopie deiner Datenbank in eine Datei</string>
-    <string name="headline_replace_database">Datenbank wiederherstellen</string>
-    <string name="description_replace_database">Lade eine zuvor gesicherte Kopie der Datenbank aus einer Datei</string>
-    <string name="action_replace">Wiederherstellen</string>
-    <string name="warning_replace_database" description="Warning message shown when user wants to replace their database with a previously saved copy. All uppercase letters are intentional and will be shown in red color.">Deine aktuelle Datenbank wird durch die Sicherung aus der Datei ERSETZT. Jegliche Daten werden dabei ÜBERSCHRIEBEN. Nach der Wiederherstellung der Datenbank wird die App neugestartet. Eventuell muss sie manuell geöffnet werden.</string>
-
-    <string name="headline_sponsor">Spenden</string>
-    <string name="description_sponsor_short_2">Unterstütze die Entwicklung der App</string>
-
-    <string name="headline_quick_add">Schnelles Hinzufügen</string>
-    <string name="description_quick_add">Dies ist eine Möglichkeit schnell Nahrungsmittel oder Gerichte zu notieren, deren Kalorienwerte du bereits kennst bzw. für die du eine Schätzung haben möchtest.</string>
-
-    <string name="headline_note">Notiz</string>
-    <string name="description_add_note">Optionale Notiz (z.B. Zutaten, "Vegan"-Status, Allergene, Zusätze) oder sonstige Details</string>
-
-    <string name="action_try_again">Erneut versuchen</string>
-
-    <string name="headline_user" description="User, person who uses the app">Benutzer</string>
-    <string name="description_food_source">Gebe an, woher die Nahrungsmittelwerte kommen</string>
-
-    <string name="action_treat_as_liquid">Als Flüssigkeit behandeln</string>
-    <string name="description_treat_as_liquid">Milliliter bei Messungen bevorzugen</string>
-
-    <string name="description_calories_are_calculated">Die Energie wird automatisch aus Makronährstoffen berechnet. Du kannst diese Funktion bei Bedarf ausschalten und den Energiewert manuell eingeben. Alkohol wird in die Berechnung nicht einbezogen.</string>
-
-    <string name="headline_appearance">Erscheinung</string>
-    <string name="headline_theme">Thema</string>
-    <string name="headline_light">Hell</string>
-    <string name="headline_dark">Dunkel</string>
-    <string name="headline_custom_palette">Benutzerdefinierte Farbpalette</string>
-    <string name="description_custom_palette">Richte deine eigene Farbpalette ein</string>
-    <string name="headline_dynamic_colors">Dynamische Farben</string>
-    <string name="description_dynamic_colors">Systemfarben anwenden</string>
-    <string name="headline_random_theme">Zufälliges Thema</string>
-    <string name="description_random_theme">Bei jedem Start der App wird ein zufälliges Thema angewandt</string>
-    <string name="headline_nutrients_colors">Nährstoff-Farben</string>
-    <string name="description_nutrients_colors_reset">Nährstoff-Farben werden auf ihre ursprünglichen Werte zurückgesetzt</string>
-
-    <string name="headline_palette_style">Palettenstil</string>
-    <string name="headline_contrast">Kontrast</string>
-    <string name="headline_amoled">AMOLED</string>
-    <string name="headline_pick_a_color">Wähle eine Farbe</string>
-
     <string name="weight">Gewicht</string>
     <string name="unit_energy" description="Energy as calories">Brennwert in Kalorien</string>
     <string name="unit_kcal">kcal</string>
@@ -326,19 +236,43 @@
     <string name="error_usda_rate_limit">FoodData Central (USDA) API-Rate-Limit überschritten</string>
     <string name="description_swiss_food_composition_database_short">Die Schweizer Lebensmittelzusammensetzungsdatenbank enthält Nährwertangaben zu über 1.100 allgemeinen Lebensmitteln</string>
     <string name="description2_swiss_food_composition_database">Die Schweizer Lebensmittelzusammensetzungsdatenbank enthält Nährwertinformationen zu über 1.100 allgemeinen Lebensmitteln. Sie ist in vier Sprachen verfügbar. Um diese Produkte in dein Lebensmitteltagebuch zu importieren, wähle bitte deine bevorzugten Sprachen aus.</string>
+    <string name="headline_external_databases">Externe Datenbanken</string>
+    <string name="description_external_databases">Probiere unterstützte Datenbanken aus</string>
     <string name="feature_manual_database_import">Manueller Import der Datenbank</string>
     <string name="action_unpack" description="Unpack the recipe ingredients">Entpacken</string>
+    <string name="headline_sponsor">Spenden</string>
+    <string name="description_sponsor_short_2">Unterstütze die Entwicklung der App</string>
     <string name="headline_source_code">Quellcode</string>
     <string name="action_write_an_email">Schreibe eine E-Mail</string>
     <string name="headline_contact">Kontakt</string>
     <string name="description_sponsor_contact">Falls Du Fragen zum Unterstützen hast, dann zögere nicht, mich per E-Mail oder auf GitHub zu kontaktieren.</string>
     <string name="sponsor_bank_or_card">Bankkonto oder Kreditkarte</string>
+    <string name="action_treat_as_liquid">Als Flüssigkeit behandeln</string>
+    <string name="description_treat_as_liquid">Milliliter bei Messungen bevorzugen</string>
+    <string name="headline_personalization">Personalisierung</string>
+    <string name="description_personalization">App an deine Vorstellungen anpassen</string>
+    <string name="headline_nutrition_facts">Nährwertangaben</string>
+    <string name="description_personalize_nutrition_facts_short">Reihenfolge der Nährwertangaben ändern</string>
+    <string name="action_reset_ordering">Reihenfolge zurücksetzen</string>
+    <string name="headline_reset_to_default">Auf Standardwerte zurücksetzen</string>
+    <string name="action_reset" description="Confirm resetting">Zurücksetzen</string>
+    <string name="description_reset_nutrition_facts">Personalisierung der Nährwertangaben zurücksetzen</string>
+    <string name="headline_note">Notiz</string>
+    <string name="description_add_note">Optionale Notiz (z.B. Zutaten, \"Vegan\"-Status, Allergene, Zusätze) oder sonstige Details</string>
+    <string name="action_try_again">Erneut versuchen</string>
+    <string name="description_calories_are_calculated">Die Energie wird automatisch aus Makronährstoffen berechnet. Du kannst diese Funktion bei Bedarf ausschalten und den Energiewert manuell eingeben. Alkohol wird in die Berechnung nicht einbezogen.</string>
     <string name="neutral_an_error_occurred">Ein Fehler ist aufgetreten</string>
     <string name="action_retry">Erneut versuchen</string>
     <string name="action_import">Importieren</string>
+    <string name="headline_today" description="Today, date">Heute, %1$s</string>
+    <string name="headline_yesterday" description="Yesterday, date">Gestern, %1$s</string>
+    <string name="headline_tomorrow" description="Tomorrow, date">Morgen, %1$s</string>
+    <string name="headline_user" description="User, person who uses the app">Benutzer</string>
+    <string name="description_food_source">Gebe an, woher die Nahrungsmittelwerte kommen</string>
     <string name="error_food_is_missing_required_fields">Dem Lebensmittel fehlen erforderliche Felder</string>
     <string name="headline_preview_release">Preview Release</string>
     <string name="description_preview_release">Du verwendest derzeit einen Preview Release. Dieser kann unvollständig und instabil sein und kann sich jederzeit ändern.</string>
+    <string name="headline_your_food">Deine Lebensmittel</string>
     <string name="headline_filters">Filter</string>
     <string name="headline_choose_ingredient" description="Choose ingredient for the recipe">Zutat auswählen</string>
     <string name="headline_edit_recipe">Rezept bearbeiten</string>
@@ -346,6 +280,9 @@
     <string name="neutral_remote_database_error">Das Produkt konnte nicht aus der externen Datenbank heruntergeladen werden. Du kannst deine zuvor heruntergeladenen Produkte immer noch ansehen.</string>
     <string name="headline_before_you_start">Bevor du loslegst</string>
     <string name="action_agree_and_continue">Zustimmen &amp; Fortfahren</string>
+    <string name="headline_food_database">Lebensmitteldatenbank</string>
+    <string name="description_food_database">Wähle, ob du eine der folgenden externen Dienste nutzen möchtest, welche ihre eigenen Nutzungsbedingungen und Datenschutzbestimmungen haben können</string>
+    <string name="action_skip">Überspringen</string>
     <string name="headline_almost_done">Fast fertig</string>
     <string name="headline_preparing_your_food_diary">Vorbereitung deines Lebensmitteltagebuchs</string>
     <string name="headline_please_wait">Bitte warten</string>
@@ -355,22 +292,54 @@
     <string name="headline_edited">Bearbeitet</string>
     <string name="headline_history">Verlauf</string>
     <string name="headline_anonymous">Anonym</string>
+    <string name="headline_recent">Zuletzt verwendet</string>
+    <string name="headline_database">Datenbank</string>
+    <string name="description_manage_database">Verwaltung der Datenbank</string>
     <string name="action_done">Fertig</string>
     <string name="neutral_measurement_added">Alles klar! Deine Messung wurde hinzugefügt</string>
     <string name="headline_imported_from_food_you_2">Importiert aus Food You 2</string>
     <string name="action_set_goals">Ziele setzen</string>
+    <string name="headline_pick_the_days">Tage auswählen</string>
+    <string name="action_set_separate_goals">Setze separate Ziele für jeden Tag</string>
+    <string name="headline_percentages">Prozentsätze</string>
+    <string name="action_import_csv_food_products">Import aus CSV-Datei</string>
+    <string name="description_import_csv_food_products">Lebensmittel aus CSV-Datei importieren</string>
+    <string name="description_import_csv_food_products_hint">Wir müssen nur wissen, was was ist. Zeige uns, welche Spalte in deiner Datei der Produktname, die Marke usw. ist.</string>
+    <string name="description_import_csv_food_products_hint_2">Alle Nährwerte müssen in Gramm oder Kcal pro 100 g angegeben werden</string>
+    <string name="action_export_csv_food_products">Export in CSV-Datei</string>
+    <string name="description_export_csv_food_products">Lebensmittel in CSV-Datei exportieren</string>
     <string name="neutral_no_column">Keine Spalte</string>
     <plurals name="neutral_imported_x_food_products">
         <item quantity="one">%1$d Lebensmittel wurde importiert</item>
         <item quantity="other">%1$d Lebensmittel wurden importiert</item>
     </plurals>
+    <string name="headline_energy_unit">Energieeinheit</string>
+    <string name="description_energy_unit">Wähle die bevorzugte Energieeinheit aus</string>
     <plurals name="neutral_exported_x_food_products">
         <item quantity="one">%1$d Lebensmittel wurde exportiert</item>
         <item quantity="other">%1$d Lebensmittel wurden exportiert</item>
     </plurals>
     <string name="headline_auto_calculate_energy">Energie automatisch berechnen</string>
     <string name="headline_manual_energy_input">Energie manuell eingeben</string>
+    <string name="headline_quick_add">Schnelles Hinzufügen</string>
+    <string name="description_quick_add">Dies ist eine Möglichkeit schnell Nahrungsmittel oder Gerichte zu notieren, deren Kalorienwerte du bereits kennst bzw. für die du eine Schätzung haben möchtest.</string>
     <string name="action_open_poll">Umfrage öffnen</string>
+    <string name="headline_colors">Farben</string>
+    <string name="description_colors">Farben der App anpassen</string>
+    <string name="headline_custom_palette">Benutzerdefinierte Farbpalette</string>
+    <string name="description_custom_palette">Richte deine eigene Farbpalette ein</string>
+    <string name="headline_dynamic_colors">Dynamische Farben</string>
+    <string name="description_dynamic_colors">Systemfarben anwenden</string>
+    <string name="headline_palette_style">Palettenstil</string>
+    <string name="headline_contrast">Kontrast</string>
+    <string name="headline_amoled">AMOLED</string>
+    <string name="headline_light">Hell</string>
+    <string name="headline_dark">Dunkel</string>
+    <string name="headline_appearance">Erscheinung</string>
+    <string name="headline_theme">Thema</string>
+    <string name="headline_pick_a_color">Wähle eine Farbe</string>
+    <string name="headline_nutrients_colors">Nährstoff-Farben</string>
+    <string name="description_nutrients_colors_reset">Nährstoff-Farben werden auf ihre ursprünglichen Werte zurückgesetzt</string>
     <string name="headline_sponsorship_goals">Ziele</string>
     <string name="description_sponsorship_goals">Durch Deinen Beitrag hilfst Du dabei, dieses Projekt unabhängig und nachhaltig zu halten, ohne auf ausbeuterische Geschäftsmodelle zu basieren. Viele kommerzielle Apps verdienen Geld, indem sie Nutzerdaten sammeln und verkaufen, personalisierte Werbung betreiben oder Suchtverhalten hervorrufen. Sponsoring stellt sicher, dass diese App datenschutzfreundlich sowie transparent bleibt und darauf ausgerichtet ist, echten Mehrwert zu liefern, ohne dein Vertrauen oder Wohlergehen zu beeinträchtigen.</string>
     <string name="description_x_away_from_next_goal">%1$s vom nächsten Ziel entfernt</string>
@@ -384,10 +353,20 @@
     <string name="action_next_month">Nächster Monat</string>
     <string name="action_previous_month">Vorheriger Monat</string>
     <string name="headline_sponsor_methods">Zahlungsarten</string>
+    <string name="headline_save_database">Datenbank sichern</string>
+    <string name="description_save_database">Sichere eine Kopie deiner Datenbank in eine Datei</string>
+    <string name="headline_replace_database">Datenbank wiederherstellen</string>
+    <string name="description_replace_database">Lade eine zuvor gesicherte Kopie der Datenbank aus einer Datei</string>
+    <string name="action_replace">Wiederherstellen</string>
+    <string name="warning_replace_database" description="Warning message shown when user wants to replace their database with a previously saved copy. All uppercase letters are intentional and will be shown in red color.">Deine aktuelle Datenbank wird durch die Sicherung aus der Datei ERSETZT. Jegliche Daten werden dabei ÜBERSCHRIEBEN. Nach der Wiederherstellung der Datenbank wird die App neugestartet. Eventuell muss sie manuell geöffnet werden.</string>
     <string name="action_sign_in">Anmelden</string>
     <string name="action_sign_out">Abmelden</string>
     <string name="headline_terms_of_service">Nutzungsbedingungen</string>
+    <string name="headline_privacy_policy">Datenschutzbestimmungen</string>
     <string name="error_there_was_an_error_while_signing_in">Beim Anmelden ist ein Fehler aufgetreten</string>
+    <string name="headline_random_theme">Zufälliges Thema</string>
+    <string name="description_random_theme">Bei jedem Start der App wird ein zufälliges Thema angewandt</string>
+    <string name="headline_terms_of_use">Nutzungsbedingungen</string>
     <string name="onboarding_privacy_tip">Diese App ist quelloffen und für dich gebaut. Wir respektieren deine Privatsphäre, deine Informationen bleiben privat.</string>
     <string name="headline_add_profile">Profil hinzufügen</string>
     <string name="headline_how_do_you_want_to_be_called">Wie möchtest du genannt werden?</string>
@@ -395,6 +374,7 @@
     <string name="headline_profile_picture">Profilbild</string>
     <string name="action_continue">Fortsetzen</string>
     <string name="headline_welcome_user_message" description="Must be short welcome message">Hi, %1$s!</string>
+    <string name="headline_data_backup_and_export">Daten-Import/Export</string>
     <string name="headline_privacy">Datenschutz</string>
     <string name="action_switch_profile">Profil wechseln</string>
     <string name="action_add_profile">Profil hinzufügen</string>
@@ -415,7 +395,9 @@
     <string name="action_remove_a_photo">Foto entfernen</string>
     <string name="description_values_per">Wähle die Menge, auf der deine Nährwerte basieren</string>
     <string name="description_privacy">Deine persönlichen Daten verwalten</string>
+    <string name="headline_database_backup">Sicherung der Datenbank</string>
     <string name="description_replacing_database">Datenbank wird ersetzt, bitte warten...</string>
+    <string name="headline_experimental">Experimentell</string>
     <string name="description_privacy_policy">Erfahre, wie deine Daten verarbeitet werden</string>
     <string name="error_open_food_facts_timeout">Open Food Facts braucht zu lange, um zu reagieren. Der Dienst ist eventuell vorübergehend langsam oder nicht verfügbar. Versuche stattdessen den Barcode des Produkts zu scannen.</string>
 </resources>
