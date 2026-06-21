@@ -11,6 +11,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -111,7 +112,12 @@ private fun LanguageScreen(
                                 .takeIf { it.isNotEmpty() }
                                 ?.let {
                                     Column {
-                                        it.forEach { author -> Text(author.toAnnotatedString()) }
+                                        it.forEach { author ->
+                                            Text(
+                                                text = author.toAnnotatedString(),
+                                                color = MaterialTheme.colorScheme.primary,
+                                            )
+                                        }
                                     }
                                 }
                         },

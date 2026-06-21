@@ -1,7 +1,6 @@
 package com.maksimowiczm.foodyou.app.ui.language
 
 import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
@@ -14,13 +13,11 @@ import com.maksimowiczm.foodyou.settings.domain.entity.Author
 @Composable
 internal fun Author.toAnnotatedString(): AnnotatedString =
     link?.let { link ->
-        val linkStyle = MaterialTheme.colorScheme.primary
         val textStyle = LocalTextStyle.current.copy()
-        val spanStyle = textStyle.merge(linkStyle).toSpanStyle()
 
-        remember(linkStyle, textStyle, spanStyle, this) {
+        remember(textStyle, this) {
             buildAnnotatedString {
-                withStyle(style = spanStyle.copy(fontStyle = FontStyle.Italic)) {
+                withStyle(style = textStyle.toSpanStyle().copy(fontStyle = FontStyle.Italic)) {
                     withLink(LinkAnnotation.Url(url = link)) { append(name) }
                 }
             }
