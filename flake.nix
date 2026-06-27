@@ -6,29 +6,26 @@
   };
 
   outputs =
-    {
-      self,
-      nixpkgs,
-      ...
-    }@inputs:
+    { self, nixpkgs }:
     let
       system = "x86_64-linux";
 
       pkgs = import nixpkgs {
-        system = system;
+        inherit system;
         config.android_sdk.accept_license = true;
         config.allowUnfree = true;
       };
 
-      buildToolsVersion = "36.0.0";
+      buildToolsVersion = "35.0.0";
+      platformVersion = "36";
 
       androidComposition = pkgs.androidenv.composeAndroidPackages {
+        platformVersions = [ platformVersion ];
         buildToolsVersions = [ buildToolsVersion ];
-        systemImageTypes = [ "google_apis_playstore" ];
-        abiVersions = [ "arm64-v8a" ];
-        includeNDK = false;
         includeEmulator = false;
-        includeExtras = [ ];
+        includeNDK = false;
+        abiVersions = [ "x86_64" ];
+        includeSystemImages = false;
       };
 
       ktfmtJar = pkgs.fetchurl {
@@ -38,22 +35,26 @@
     in
     {
       devShells.${system}.default = pkgs.mkShell {
-        buildInputs = [
-          pkgs.just
-          pkgs.temurin-bin-21
-          pkgs.jq
-          pkgs.zensical
+        buildInputs = with pkgs; [
+          just
+          temurin-bin-21
+          zensical
           androidComposition.androidsdk
         ];
 
         KTFMT_JAR = "${ktfmtJar}";
+
         ANDROID_HOME = "${androidComposition.androidsdk}/libexec/android-sdk";
         ANDROID_SDK_ROOT = "${androidComposition.androidsdk}/libexec/android-sdk";
         ANDROID_NDK_ROOT = "${androidComposition.androidsdk}/libexec/android-sdk/ndk-bundle";
+        GRADLE_OPTS = "-Dorg.gradle.project.android.aapt2FromMavenOverride=${androidComposition.androidsdk}/libexec/android-sdk/build-tools/${buildToolsVersion}/aapt2";
 
         shellHook = ''
           export PATH="$ANDROID_HOME/build-tools/${buildToolsVersion}:$PATH"
           export PATH="$ANDROID_HOME/platform-tools:$PATH"
+          export PATH="$ANDROID_HOME/emulator:$PATH"
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+
           just | ${pkgs.lolcat}/bin/lolcat
         '';
       };
