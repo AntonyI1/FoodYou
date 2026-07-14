@@ -14,6 +14,12 @@
         </intent>
     </queries>
 
+    <!--
+      usesCleartextTraffic: self-hosted sync reaches the user's own server over plain HTTP on the
+      LAN / Tailscale (encryption comes from Tailscale/WireGuard or their reverse-proxy TLS, per
+      SELF_HOSTED_SYNC.md). Android's OkHttp engine enforces the cleartext policy, so without this
+      every "Save & test" and background sync silently fails on Android 9+. Do not remove.
+    -->
     <application
         android:name=".app.infrastructure.android.FoodYouApplication"
         android:allowBackup="true"
@@ -26,6 +32,7 @@
         android:roundIcon="${applicationRoundIcon}"
         android:supportsRtl="true"
         android:theme="@style/Theme.FoodYou"
+        android:usesCleartextTraffic="true"
         tools:targetApi="36">
 
         <activity
