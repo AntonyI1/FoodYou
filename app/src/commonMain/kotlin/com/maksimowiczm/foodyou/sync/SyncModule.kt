@@ -4,6 +4,7 @@ import com.maksimowiczm.foodyou.common.infrastructure.koin.userPreferencesReposi
 import com.maksimowiczm.foodyou.common.infrastructure.koin.userPreferencesRepositoryOf
 import com.maksimowiczm.foodyou.sync.domain.SyncEngine
 import com.maksimowiczm.foodyou.sync.domain.SyncPreferences
+import com.maksimowiczm.foodyou.sync.domain.SyncRunner
 import com.maksimowiczm.foodyou.sync.domain.SyncTokenRepository
 import com.maksimowiczm.foodyou.sync.infrastructure.DefaultSyncEngine
 import com.maksimowiczm.foodyou.sync.infrastructure.SyncMapper
@@ -59,6 +60,14 @@ val syncModule = module {
             mapper = get(),
             preferencesRepository = userPreferencesRepository(),
             tokenRepository = get(),
+        )
+    }
+
+    factory {
+        SyncRunner(
+            engine = get(),
+            preferencesRepository = userPreferencesRepository(),
+            dateProvider = get(),
         )
     }
 }
