@@ -34,6 +34,7 @@ import com.maksimowiczm.foodyou.app.ui.meal.MealSettingsScreen
 import com.maksimowiczm.foodyou.app.ui.personalization.PersonalizationScreen
 import com.maksimowiczm.foodyou.app.ui.personalization.PersonalizeNutritionFactsScreen
 import com.maksimowiczm.foodyou.app.ui.settings.SettingsScreen
+import com.maksimowiczm.foodyou.app.ui.sync.SyncSettingsScreen
 import com.maksimowiczm.foodyou.app.ui.sponsor.SponsorScreen
 import com.maksimowiczm.foodyou.app.ui.theme.ThemeScreen
 import com.maksimowiczm.foodyou.common.domain.measurement.Measurement
@@ -92,7 +93,11 @@ fun FoodYouAppNavHost(onDatabaseBackup: () -> Unit, modifier: Modifier = Modifie
                 onGoals = { navController.navigateSingleTop(GoalsSetup) },
                 onPersonalization = { navController.navigateSingleTop(Personalization) },
                 onDatabase = { navController.navigateSingleTop(DatabaseSettings) },
+                onSelfHostedSync = { navController.navigateSingleTop(SelfHostedSync) },
             )
+        }
+        forwardBackwardComposable<SelfHostedSync> {
+            SyncSettingsScreen(onBack = { navController.popBackStackInclusive<SelfHostedSync>() })
         }
         forwardBackwardComposable<Language> {
             LanguageScreen(onBack = { navController.popBackStackInclusive<Language>() })
@@ -401,6 +406,8 @@ fun FoodYouAppNavHost(onDatabaseBackup: () -> Unit, modifier: Modifier = Modifie
 @Serializable private object GoalsSetup
 
 @Serializable private object DatabaseSettings
+
+@Serializable private object SelfHostedSync
 
 @Serializable private object ExternalDatabases
 

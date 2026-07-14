@@ -531,4 +531,20 @@
     <string name="description_privacy_policy">See how your data is handled</string>
 
     <string name="error_open_food_facts_timeout">Open Food Facts is taking too long to respond. The service may be temporarily slow or unavailable. Try scanning the product barcode instead.</string>
+
+    <string name="headline_self_hosted_sync">Self-hosted sync</string>
+    <string name="description_self_hosted_sync">Sync your diary and goals with your own server so Claude can read and log entries. The app only ever talks to the server you configure here.</string>
+    <string name="neutral_set_up_self_hosted_sync">Sync your diary with your own server</string>
+    <string name="headline_sync_server_url">Server URL</string>
+    <string name="headline_sync_token">Access token</string>
+    <string name="neutral_sync_token_saved">A token is saved. Enter a new one to replace it.</string>
+    <string name="neutral_enable_sync">Enable sync</string>
+    <string name="neutral_enable_sync_description">Sync periodically and when the app opens</string>
+    <string name="action_test_connection">Save &amp; test connection</string>
+    <string name="action_sync_now">Sync now</string>
+    <string name="neutral_sync_connection_successful">Connection successful</string>
+    <string name="error_sync_connection_failed">Could not reach the server. Check the URL and token.</string>
+    <string name="neutral_sync_last_synced">Last synced %1$s</string>
+    <string name="neutral_sync_never_synced">Never synced</string>
+    <string name="error_sync_last_error">Last sync failed: %1$s</string>
 </resources>
