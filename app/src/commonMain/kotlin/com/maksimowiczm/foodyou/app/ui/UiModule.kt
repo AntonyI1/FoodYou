@@ -11,6 +11,7 @@ import com.maksimowiczm.foodyou.app.ui.meal.meal
 import com.maksimowiczm.foodyou.app.ui.onboarding.onboarding
 import com.maksimowiczm.foodyou.app.ui.personalization.personalization
 import com.maksimowiczm.foodyou.app.ui.sponsor.sponsor
+import com.maksimowiczm.foodyou.app.ui.sync.syncSettings
 import com.maksimowiczm.foodyou.app.ui.theme.theme
 import com.maksimowiczm.foodyou.common.infrastructure.koin.userPreferencesRepository
 import org.koin.core.module.dsl.viewModel
@@ -30,5 +31,6 @@ val uiModule = module {
     onboarding()
     personalization()
     sponsor()
+    syncSettings()
     theme()
 }

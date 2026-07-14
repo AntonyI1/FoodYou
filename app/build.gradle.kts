@@ -99,11 +99,13 @@ kotlin {
             implementation(libs.kotlin.test)
             implementation(libs.androidx.room.testing)
             implementation(libs.androidx.sqlite.bundled)
+            implementation(libs.ktor.client.mock)
         }
 
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
             implementation(libs.androidx.appcompat)
+            implementation(libs.androidx.work.runtime)
             implementation(libs.koin.android)
             implementation(libs.ktor.client.okhttp)
             implementation(libs.sqlite.android)

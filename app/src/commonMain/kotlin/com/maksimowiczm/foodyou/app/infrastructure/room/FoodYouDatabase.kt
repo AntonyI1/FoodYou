@@ -44,6 +44,8 @@ import com.maksimowiczm.foodyou.fooddiary.infrastructure.room.MealEntity
 import com.maksimowiczm.foodyou.fooddiary.infrastructure.room.MeasurementEntity
 import com.maksimowiczm.foodyou.sponsorship.infrastructure.room.SponsorshipDatabase
 import com.maksimowiczm.foodyou.sponsorship.infrastructure.room.SponsorshipEntity
+import com.maksimowiczm.foodyou.sync.infrastructure.room.SyncDatabase
+import com.maksimowiczm.foodyou.sync.infrastructure.room.SyncEntryMappingEntity
 
 @Database(
     entities =
@@ -63,6 +65,7 @@ import com.maksimowiczm.foodyou.sponsorship.infrastructure.room.SponsorshipEntit
             SponsorshipEntity::class,
             MeasurementSuggestionEntity::class,
             ManualDiaryEntryEntity::class,
+            SyncEntryMappingEntity::class,
             ProductFts::class,
             RecipeFts::class,
         ],
@@ -111,6 +114,7 @@ import com.maksimowiczm.foodyou.sponsorship.infrastructure.room.SponsorshipEntit
             AutoMigration(from = 24, to = 25), // Add FoodEventEntity onDelete cascade
             AutoMigration(from = 28, to = 29), // Add ManualDiaryEntryEntity
             AutoMigration(from = 29, to = 30), // Add MeasurementSuggestion indices
+            AutoMigration(from = 32, to = 33), // Add SyncEntryMappingEntity for self-hosted sync
             /** @see [FoodSearchFtsMigration] Add FTS tables for ProductEntity and RecipeEntity */
             /**
              * @see [FoodSearchFtsCyrillicMigration] Add Cyrillic tokenizer support to FTS tables
@@ -128,7 +132,8 @@ abstract class FoodYouDatabase :
     FoodDatabase,
     FoodSearchDatabase,
     FoodDiaryDatabase,
-    SponsorshipDatabase {
+    SponsorshipDatabase,
+    SyncDatabase {
 
     override suspend fun <T> withTransaction(block: suspend DomainTransactionScope<T>.() -> T): T =
         useWriterConnection {
@@ -139,7 +144,7 @@ abstract class FoodYouDatabase :
         }
 
     companion object {
-        const val VERSION = 32
+        const val VERSION = 33
 
         private val migrations: List<Migration> =
             listOf(
