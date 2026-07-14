@@ -52,10 +52,6 @@ internal class SyncSettingsViewModel(
                 initialValue = SyncSettingsModel(),
             )
 
-    fun setServerUrl(url: String) {
-        viewModelScope.launch { preferencesRepository.update { copy(serverUrl = url.trim()) } }
-    }
-
     fun setEnabled(enabled: Boolean) {
         viewModelScope.launch { preferencesRepository.update { copy(enabled = enabled) } }
     }
@@ -71,18 +67,24 @@ internal class SyncSettingsViewModel(
         }
     }
 
+    /** The persisted server URL, read once to seed the settings text field. */
+    suspend fun currentServerUrl(): String = preferencesRepository.observe().first().serverUrl
+
     /**
-     * Normalizes and persists the URL (auto-prefixing a scheme so scheme-less input doesn't yield a
-     * cryptic Ktor failure), stores a newly entered token, then probes the server. Runs sequentially.
+     * Normalizes and persists the [url] the user entered (auto-prefixing a scheme so scheme-less
+     * input doesn't yield a cryptic Ktor failure), stores a newly entered token, then probes the
+     * server. The URL is taken straight from the field rather than read back from preferences, so the
+     * value under test is exactly what was typed — the field owns its own state (see
+     * SyncSettingsScreen); routing it through the async preferences round-trip is what reset the text
+     * cursor and made typing come out reversed.
      */
-    suspend fun saveAndTestConnection(token: String): Boolean {
-        val current = preferencesRepository.observe().first().serverUrl
-        val url = normalizeUrl(current)
-        if (url != current) preferencesRepository.update { copy(serverUrl = url) }
+    suspend fun saveAndTestConnection(url: String, token: String): Boolean {
+        val normalized = normalizeUrl(url)
+        preferencesRepository.update { copy(serverUrl = normalized) }
         if (token.isNotBlank()) tokenRepository.setToken(token.trim())
-        if (url.isBlank()) return false
+        if (normalized.isBlank()) return false
         val savedToken = tokenRepository.getToken() ?: return false
-        return syncEngine.testConnection(url, savedToken)
+        return syncEngine.testConnection(normalized, savedToken)
     }
 
     private fun normalizeUrl(raw: String): String {

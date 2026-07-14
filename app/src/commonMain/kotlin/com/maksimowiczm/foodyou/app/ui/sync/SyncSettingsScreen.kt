@@ -6,8 +6,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.TextObfuscationMode
 import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -59,16 +62,25 @@ fun SyncSettingsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     var connectionState by remember { mutableStateOf(ConnectionState.Idle) }
 
+    // The URL field owns its own text + cursor (like the token field below). Binding it straight to
+    // the async preferences flow reset the cursor to index 0 on every keystroke, so typing came out
+    // reversed. Instead we seed it once from the persisted value and commit on Save & test.
+    val urlState = rememberTextFieldState()
+    LaunchedEffect(Unit) {
+        val persisted = viewModel.currentServerUrl()
+        if (persisted.isNotEmpty()) urlState.setTextAndPlaceCursorAtEnd(persisted)
+    }
+
     SyncSettingsScreen(
         onBack = onBack,
         model = model,
         connectionState = connectionState,
-        onServerUrlChange = viewModel::setServerUrl,
+        urlState = urlState,
         onEnabledChange = viewModel::setEnabled,
         onSaveAndTest = { token ->
             connectionState = ConnectionState.Testing
             scope.launch {
-                val success = viewModel.saveAndTestConnection(token)
+                val success = viewModel.saveAndTestConnection(urlState.text.toString(), token)
                 connectionState =
                     if (success) ConnectionState.Success else ConnectionState.Failure
             }
@@ -83,7 +95,7 @@ private fun SyncSettingsScreen(
     onBack: () -> Unit,
     model: SyncSettingsModel,
     connectionState: ConnectionState,
-    onServerUrlChange: (String) -> Unit,
+    urlState: TextFieldState,
     onEnabledChange: (Boolean) -> Unit,
     onSaveAndTest: (String) -> Unit,
     onSyncNow: () -> Unit,
@@ -120,12 +132,11 @@ private fun SyncSettingsScreen(
 
             item {
                 OutlinedTextField(
-                    value = model.serverUrl,
-                    onValueChange = onServerUrlChange,
+                    state = urlState,
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text(stringResource(Res.string.headline_sync_server_url)) },
                     placeholder = { Text(stringResource(Res.string.neutral_sync_server_url_example)) },
-                    singleLine = true,
+                    lineLimits = TextFieldLineLimits.SingleLine,
                     keyboardOptions =
                         KeyboardOptions(
                             keyboardType = KeyboardType.Uri,
@@ -173,7 +184,7 @@ private fun SyncSettingsScreen(
                 Button(
                     onClick = { onSaveAndTest(tokenState.text.toString()) },
                     enabled =
-                        model.serverUrl.isNotBlank() &&
+                        urlState.text.isNotBlank() &&
                             connectionState != ConnectionState.Testing,
                     shapes = ButtonDefaults.shapes(),
                 ) {
