@@ -295,13 +295,13 @@ internal class DefaultSyncEngine(
                 if (localGoal != snapshot) {
                     api.setGoals(connection, localGoal)
                     saveGoalsSnapshot(localGoal)
-                } else if (serverGoal != null && serverGoal != snapshot) {
-                    if (applyServerGoals(weekly, serverGoal)) saveGoalsSnapshot(serverGoal)
+                } else if (serverGoal != null && !serverGoal.isEmpty && serverGoal != snapshot) {
+                    convergeServerGoal(connection, weekly, localGoal, serverGoal)
                 }
             // First contact: if the server already has any goal set (e.g. Claude configured it),
             // it wins — don't clobber it with the app's defaults.
             serverGoal != null && !serverGoal.isEmpty ->
-                if (applyServerGoals(weekly, serverGoal)) saveGoalsSnapshot(serverGoal)
+                convergeServerGoal(connection, weekly, localGoal, serverGoal)
             // Server never had goals (or is unreachable): seed it from the app.
             else -> {
                 api.setGoals(connection, localGoal)
@@ -309,6 +309,36 @@ internal class DefaultSyncEngine(
             }
         }
     }
+
+    /**
+     * Apply a non-empty server goal and converge both sides. The server's set_goals is
+     * merge-semantics, so a server row can be PARTIAL (some macros set, some null) — which
+     * [SyncMapper.toMacronutrientGoal] can't materialize. Overlay the server's set fields onto the
+     * (always-complete) local goal to form a complete goal, apply it, and — only when the server row
+     * was partial — push the completed goal back so the server row becomes complete too. A complete
+     * server goal is already converged, so no push-back. Without this, a partial server goal is never
+     * applied and the snapshot is never written: goals sync stalemates silently, forever.
+     */
+    private suspend fun convergeServerGoal(
+        connection: SyncConnection,
+        weekly: WeeklyGoals,
+        localGoal: GoalsDto,
+        serverGoal: GoalsDto,
+    ) {
+        val merged = serverGoal.overlayOnto(localGoal)
+        if (!applyServerGoals(weekly, merged)) return
+        if (!serverGoal.isComplete) api.setGoals(connection, merged)
+        saveGoalsSnapshot(merged)
+    }
+
+    /** Overlay this goal's explicitly-set (non-null) fields onto [local]; server wins field-wise. */
+    private fun GoalsDto.overlayOnto(local: GoalsDto): GoalsDto =
+        GoalsDto(
+            kcal = kcal ?: local.kcal,
+            proteinG = proteinG ?: local.proteinG,
+            carbsG = carbsG ?: local.carbsG,
+            fatG = fatG ?: local.fatG,
+        )
 
     /** Returns true if a complete server goal was applied locally. */
     private suspend fun applyServerGoals(weekly: WeeklyGoals, dto: GoalsDto): Boolean {

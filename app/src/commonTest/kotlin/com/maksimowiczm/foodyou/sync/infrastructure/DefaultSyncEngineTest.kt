@@ -330,6 +330,71 @@ class DefaultSyncEngineTest {
         assertTrue(env.api.setGoalsCalls.isEmpty())
     }
 
+    // partial-goal stalemate fix: first contact — a partial server goal (merge-semantics server) is
+    // completed by overlaying local values, applied, pushed back complete, then both sides converge.
+    @Test
+    fun goals_firstContactPartialServerMergesAndConverges() = runBlocking {
+        val env = TestEnv()
+        env.goalsRepo.weekly = weeklyGoal(2000.0, 150.0, 200.0, 70.0)
+        env.api.serverGoals = GoalsDto(kcal = null, proteinG = 180.0, carbsG = null, fatG = null)
+
+        env.engine.sync()
+
+        val applied = env.goalsRepo.weekly.monday.macronutrientGoal
+        assertEquals(180.0, applied.proteinsGrams, "server's set field wins")
+        assertEquals(2000.0, applied.energyKcal, "local fills the server's nulls")
+        assertEquals(200.0, applied.carbohydratesGrams)
+        assertEquals(70.0, applied.fatsGrams)
+        assertEquals(
+            GoalsDto(2000.0, 180.0, 200.0, 70.0),
+            env.api.setGoalsCalls.singleOrNull(),
+            "merged complete goal pushed back to converge the server row",
+        )
+        assertEquals(180.0, env.prefsRepo.value.goalProteinG, "snapshot written")
+        assertEquals(2000.0, env.prefsRepo.value.goalKcal, "snapshot written")
+
+        env.api.setGoalsCalls.clear()
+        env.engine.sync()
+
+        assertTrue(env.api.setGoalsCalls.isEmpty(), "converged — no further goal calls")
+    }
+
+    // partial-goal stalemate fix: steady state — an already-synced server row turns partial; the set
+    // field overlays local, the completed goal is pushed back, and both sides converge.
+    @Test
+    fun goals_steadyStatePartialServerOverlaysLocal() = runBlocking {
+        val env = TestEnv()
+        env.goalsRepo.weekly = weeklyGoal(2000.0, 150.0, 200.0, 70.0)
+        env.prefsRepo.set(
+            env.prefsRepo.value.copy(
+                goalKcal = 2000.0,
+                goalProteinG = 150.0,
+                goalCarbsG = 200.0,
+                goalFatG = 70.0,
+            )
+        )
+        env.api.serverGoals = GoalsDto(kcal = null, proteinG = 185.0, carbsG = null, fatG = null)
+
+        env.engine.sync()
+
+        val applied = env.goalsRepo.weekly.monday.macronutrientGoal
+        assertEquals(185.0, applied.proteinsGrams, "server's set field overlays local")
+        assertEquals(2000.0, applied.energyKcal, "local unchanged where server is null")
+        assertEquals(200.0, applied.carbohydratesGrams)
+        assertEquals(70.0, applied.fatsGrams)
+        assertEquals(
+            GoalsDto(2000.0, 185.0, 200.0, 70.0),
+            env.api.setGoalsCalls.singleOrNull(),
+            "merged complete goal pushed back to converge the server row",
+        )
+        assertEquals(185.0, env.prefsRepo.value.goalProteinG, "snapshot advanced to the merged goal")
+
+        env.api.setGoalsCalls.clear()
+        env.engine.sync()
+
+        assertTrue(env.api.setGoalsCalls.isEmpty(), "converged — no further goal calls")
+    }
+
     // ---- fakes & builders ----
 
     private class TestEnv(readTimeoutMs: Long = 5_000L) {
