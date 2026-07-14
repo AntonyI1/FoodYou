@@ -45,6 +45,7 @@ class FoodYouApplication : Application() {
     }
 
     @Volatile private var syncEnabled = false
+    @Volatile private var startedActivities = 0
 
     /**
      * Schedules WorkManager periodic sync while enabled and triggers a one-time sync when the app
@@ -55,6 +56,7 @@ class FoodYouApplication : Application() {
             inject(named(SyncPreferences::class.qualifiedName!!))
 
         coroutineScope.launch {
+            var firstEmission = true
             syncPreferences.observe().map { it.enabled }.distinctUntilChanged().collect { enabled ->
                 syncEnabled = enabled
                 if (enabled) {
@@ -62,13 +64,17 @@ class FoodYouApplication : Application() {
                 } else {
                     SyncScheduling.cancelPeriodic(this@FoodYouApplication)
                 }
+                // Cold start: the launcher Activity can reach onStart before this flow first
+                // emits, so the on-foreground trigger below sees syncEnabled=false. Catch it once.
+                if (firstEmission && enabled && startedActivities > 0) {
+                    SyncScheduling.syncNow(this@FoodYouApplication)
+                }
+                firstEmission = false
             }
         }
 
         registerActivityLifecycleCallbacks(
             object : ActivityLifecycleCallbacks {
-                private var startedActivities = 0
-
                 override fun onActivityStarted(activity: Activity) {
                     if (startedActivities++ == 0 && syncEnabled) {
                         SyncScheduling.syncNow(this@FoodYouApplication)

@@ -124,7 +124,7 @@ private fun SyncSettingsScreen(
                     onValueChange = onServerUrlChange,
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text(stringResource(Res.string.headline_sync_server_url)) },
-                    placeholder = { Text("http://192.168.1.10:8365") },
+                    placeholder = { Text(stringResource(Res.string.neutral_sync_server_url_example)) },
                     singleLine = true,
                     keyboardOptions =
                         KeyboardOptions(

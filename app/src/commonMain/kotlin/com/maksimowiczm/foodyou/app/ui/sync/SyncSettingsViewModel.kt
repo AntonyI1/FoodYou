@@ -71,11 +71,26 @@ internal class SyncSettingsViewModel(
         }
     }
 
-    /** Persists a newly entered token (if any) and probes the server. Runs sequentially. */
+    /**
+     * Normalizes and persists the URL (auto-prefixing a scheme so scheme-less input doesn't yield a
+     * cryptic Ktor failure), stores a newly entered token, then probes the server. Runs sequentially.
+     */
     suspend fun saveAndTestConnection(token: String): Boolean {
+        val current = preferencesRepository.observe().first().serverUrl
+        val url = normalizeUrl(current)
+        if (url != current) preferencesRepository.update { copy(serverUrl = url) }
         if (token.isNotBlank()) tokenRepository.setToken(token.trim())
-        val serverUrl = preferencesRepository.observe().first().serverUrl
+        if (url.isBlank()) return false
         val savedToken = tokenRepository.getToken() ?: return false
-        return syncEngine.testConnection(serverUrl, savedToken)
+        return syncEngine.testConnection(url, savedToken)
+    }
+
+    private fun normalizeUrl(raw: String): String {
+        val trimmed = raw.trim()
+        return when {
+            trimmed.isBlank() -> ""
+            trimmed.startsWith("http://") || trimmed.startsWith("https://") -> trimmed
+            else -> "http://$trimmed"
+        }
     }
 }

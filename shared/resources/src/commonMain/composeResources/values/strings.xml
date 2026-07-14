@@ -536,6 +536,7 @@
     <string name="description_self_hosted_sync">Sync your diary and goals with your own server so Claude can read and log entries. The app only ever talks to the server you configure here.</string>
     <string name="neutral_set_up_self_hosted_sync">Sync your diary with your own server</string>
     <string name="headline_sync_server_url">Server URL</string>
+    <string name="neutral_sync_server_url_example">http://192.168.1.10:8365</string>
     <string name="headline_sync_token">Access token</string>
     <string name="neutral_sync_token_saved">A token is saved. Enter a new one to replace it.</string>
     <string name="neutral_enable_sync">Enable sync</string>

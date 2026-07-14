@@ -14,13 +14,14 @@ import java.util.concurrent.TimeUnit
 internal object SyncScheduling {
     private const val PERIODIC_WORK = "foodyou_sync_periodic"
     private const val ONE_TIME_WORK = "foodyou_sync_now"
+    private const val SYNC_INTERVAL_MINUTES = 15L // WorkManager's periodic floor
 
     private val networkConstraint =
         Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
 
     fun schedulePeriodic(context: Context) {
         val request =
-            PeriodicWorkRequestBuilder<SyncWorker>(15, TimeUnit.MINUTES)
+            PeriodicWorkRequestBuilder<SyncWorker>(SYNC_INTERVAL_MINUTES, TimeUnit.MINUTES)
                 .setConstraints(networkConstraint)
                 .build()
         WorkManager.getInstance(context)
