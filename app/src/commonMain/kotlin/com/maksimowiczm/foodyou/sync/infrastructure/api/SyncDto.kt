@@ -48,11 +48,22 @@ data class EntriesResponseDto(
 /** Bulk push body: `POST /api/v1/entries`. */
 @Serializable data class BulkEntriesDto(val entries: List<FoodEntryDto>)
 
-/** Daily goals (single row), `GET/PUT /api/v1/goals`. */
+/**
+ * Daily goals (single row), `GET/PUT /api/v1/goals`. All fields are nullable: the server returns
+ * null for unset targets and set_goals is merge-semantics server-side, so partial rows are normal.
+ */
 @Serializable
 data class GoalsDto(
-    val kcal: Double,
-    @SerialName("protein_g") val proteinG: Double,
-    @SerialName("carbs_g") val carbsG: Double,
-    @SerialName("fat_g") val fatG: Double,
-)
+    val kcal: Double? = null,
+    @SerialName("protein_g") val proteinG: Double? = null,
+    @SerialName("carbs_g") val carbsG: Double? = null,
+    @SerialName("fat_g") val fatG: Double? = null,
+) {
+    /** True when every macro target is present — required to materialize a local DailyGoal. */
+    val isComplete: Boolean
+        get() = kcal != null && proteinG != null && carbsG != null && fatG != null
+
+    /** True when no target is set — the server has never received goals. */
+    val isEmpty: Boolean
+        get() = kcal == null && proteinG == null && carbsG == null && fatG == null
+}

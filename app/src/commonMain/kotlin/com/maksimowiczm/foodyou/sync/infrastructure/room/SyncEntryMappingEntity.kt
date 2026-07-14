@@ -16,6 +16,8 @@ import androidx.room.PrimaryKey
  * @property localTable Local table the entry lives in: "ManualDiaryEntry" or "Measurement".
  * @property localId Local auto-increment id within [localTable].
  * @property contentHash Canonical hash of the last synced content, to detect genuine local edits.
+ *   NULL means the uuid was reserved before a push whose outcome is unknown — the entry is
+ *   re-pushed next cycle under the same uuid (idempotent by the server's upsert-by-id).
  * @property serverUpdatedAt Epoch seconds of the last server `updated_at` we applied or pushed.
  */
 @Entity(
@@ -26,6 +28,6 @@ data class SyncEntryMappingEntity(
     @PrimaryKey val uuid: String,
     val localTable: String,
     val localId: Long,
-    val contentHash: String,
+    val contentHash: String?,
     val serverUpdatedAt: Long,
 )

@@ -11,9 +11,9 @@ import androidx.room.Query
 @Dao
 interface SyncReadDao {
 
-    @Query("SELECT id, updatedEpochSeconds AS updatedAt FROM ManualDiaryEntry")
+    @Query("SELECT id FROM ManualDiaryEntry")
     suspend fun manualEntryRefs(): List<SyncLocalRef>
 
-    @Query("SELECT id, updatedAt FROM Measurement")
+    @Query("SELECT id FROM Measurement")
     suspend fun measurementRefs(): List<SyncLocalRef>
 }

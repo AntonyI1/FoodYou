@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 33,
-    "identityHash": "a91d475293aede8e7450e3a9dd6e4e61",
+    "identityHash": "d5a12b921817ad6ddfcee4e8f7ae1be8",
     "entities": [
       {
         "tableName": "Product",
@@ -1657,7 +1657,7 @@
       },
       {
         "tableName": "SyncEntryMapping",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`uuid` TEXT NOT NULL, `localTable` TEXT NOT NULL, `localId` INTEGER NOT NULL, `contentHash` TEXT NOT NULL, `serverUpdatedAt` INTEGER NOT NULL, PRIMARY KEY(`uuid`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`uuid` TEXT NOT NULL, `localTable` TEXT NOT NULL, `localId` INTEGER NOT NULL, `contentHash` TEXT, `serverUpdatedAt` INTEGER NOT NULL, PRIMARY KEY(`uuid`))",
         "fields": [
           {
             "fieldPath": "uuid",
@@ -1680,8 +1680,7 @@
           {
             "fieldPath": "contentHash",
             "columnName": "contentHash",
-            "affinity": "TEXT",
-            "notNull": true
+            "affinity": "TEXT"
           },
           {
             "fieldPath": "serverUpdatedAt",
@@ -1807,7 +1806,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'a91d475293aede8e7450e3a9dd6e4e61')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd5a12b921817ad6ddfcee4e8f7ae1be8')"
     ]
   }
 }

@@ -1,5 +1,6 @@
 package com.maksimowiczm.foodyou.sync.infrastructure
 
+import com.maksimowiczm.foodyou.common.domain.measurement.Measurement
 import com.maksimowiczm.foodyou.common.infrastructure.room.Minerals
 import com.maksimowiczm.foodyou.common.infrastructure.room.Nutrients
 import com.maksimowiczm.foodyou.common.infrastructure.room.Vitamins
@@ -30,8 +31,8 @@ class SyncMapper(private val timeZone: TimeZone = TimeZone.currentSystemDefault(
     fun toDto(entry: DiaryEntry, mealName: String, uuid: String?): FoodEntryDto {
         val quantity =
             when (entry) {
-                is FoodDiaryEntry -> QuantityDto(entry.weight, "g")
-                is ManualDiaryEntry -> QuantityDto(1.0, "serving")
+                is FoodDiaryEntry -> entry.measurement.toQuantityDto()
+                is ManualDiaryEntry -> QuantityDto(1.0, UNIT_SERVING)
             }
         val nf = entry.nutritionFacts
         return FoodEntryDto(
@@ -114,6 +115,25 @@ class SyncMapper(private val timeZone: TimeZone = TimeZone.currentSystemDefault(
         return fnv1a64Hex(canonicalJson.encodeToString(ContentSignature.serializer(), signature))
     }
 
+    /**
+     * Hash of what a manual entry materialized from [dto] would push back. The local row can only
+     * hold name + date + the 8 nutrient totals + meal, so brand/barcode/notes drop and quantity
+     * collapses to 1 serving; [localMealName] carries the local meal's canonical casing. Storing
+     * THIS at apply time (instead of the rich server dto's hash) closes the sync loop by
+     * construction — the next push re-derives the same lossy form, matches, and never overwrites the
+     * server's richer copy.
+     */
+    fun localManualContentHash(dto: FoodEntryDto, localMealName: String): String =
+        contentHash(
+            dto.copy(
+                meal = localMealName,
+                brand = null,
+                barcode = null,
+                notes = null,
+                quantity = QuantityDto(1.0, UNIT_SERVING),
+            )
+        )
+
     fun toGoalsDto(goal: MacronutrientGoal): GoalsDto =
         GoalsDto(
             kcal = goal.energyKcal,
@@ -122,16 +142,22 @@ class SyncMapper(private val timeZone: TimeZone = TimeZone.currentSystemDefault(
             fatG = goal.fatsGrams,
         )
 
-    fun toMacronutrientGoal(dto: GoalsDto): MacronutrientGoal =
-        MacronutrientGoal.Manual(
-            energyKcal = dto.kcal,
-            proteinsGrams = dto.proteinG,
-            fatsGrams = dto.fatG,
-            carbohydratesGrams = dto.carbsG,
-        )
+    /** Null when the server goal is incomplete (some macro target unset) — can't be materialized. */
+    fun toMacronutrientGoal(dto: GoalsDto): MacronutrientGoal? =
+        if (dto.isComplete) {
+            MacronutrientGoal.Manual(
+                energyKcal = dto.kcal!!,
+                proteinsGrams = dto.proteinG!!,
+                fatsGrams = dto.fatG!!,
+                carbohydratesGrams = dto.carbsG!!,
+            )
+        } else {
+            null
+        }
 
     private companion object {
         const val SOURCE_APP = "app"
+        const val UNIT_SERVING = "serving"
 
         val canonicalJson = Json {
             encodeDefaults = true
@@ -145,6 +171,20 @@ class SyncMapper(private val timeZone: TimeZone = TimeZone.currentSystemDefault(
             Minerals(null, null, null, null, null, null, null, null, null, null, null, null)
     }
 }
+
+/**
+ * Descriptive quantity for a measurement (nutrient totals remain authoritative). Mass units report
+ * grams, volume units report millilitres; serving/package report their count.
+ */
+internal fun Measurement.toQuantityDto(): QuantityDto =
+    when (this) {
+        is Measurement.Gram -> QuantityDto(value, "g")
+        is Measurement.Ounce -> QuantityDto(metric, "g")
+        is Measurement.Milliliter -> QuantityDto(value, "ml")
+        is Measurement.FluidOunce -> QuantityDto(metric, "ml")
+        is Measurement.Serving -> QuantityDto(quantity, "serving")
+        is Measurement.Package -> QuantityDto(quantity, "piece")
+    }
 
 @Serializable
 private data class ContentSignature(

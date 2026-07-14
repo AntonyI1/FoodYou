@@ -8,7 +8,5 @@ interface SyncTokenRepository {
 
     suspend fun getToken(): String?
 
-    suspend fun clear()
-
     fun hasToken(): Flow<Boolean>
 }

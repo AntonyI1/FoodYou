@@ -25,19 +25,28 @@ import org.koin.dsl.bind
 import org.koin.dsl.module
 import org.koin.dsl.onClose
 
+private const val REQUEST_TIMEOUT_MS = 30_000L
+private const val CONNECT_TIMEOUT_MS = 15_000L
+
 private val Scope.syncDatabase: SyncDatabase
     get() = get()
 
 val syncModule = module {
     single(named(SyncApi::class.qualifiedName!!)) {
             HttpClient {
-                install(HttpTimeout)
+                install(HttpTimeout) {
+                    requestTimeoutMillis = REQUEST_TIMEOUT_MS
+                    connectTimeoutMillis = CONNECT_TIMEOUT_MS
+                    socketTimeoutMillis = REQUEST_TIMEOUT_MS
+                }
                 install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
             }
         }
         .onClose { it?.close() }
 
-    factory<SyncApi> { KtorSyncApi(client = get(named(SyncApi::class.qualifiedName!!))) }
+    factory<SyncApi> {
+        KtorSyncApi(client = get(named(SyncApi::class.qualifiedName!!)), networkConfig = get())
+    }
 
     single { SyncMapper() }
 
@@ -56,6 +65,7 @@ val syncModule = module {
             foodEntryRepository = get(),
             mealRepository = get(),
             goalsRepository = get(),
+            transactionProvider = get(),
             api = get(),
             mapper = get(),
             preferencesRepository = userPreferencesRepository(),
@@ -63,7 +73,8 @@ val syncModule = module {
         )
     }
 
-    factory {
+    // Single so its mutex serializes manual / periodic / on-foreground triggers.
+    single {
         SyncRunner(
             engine = get(),
             preferencesRepository = userPreferencesRepository(),

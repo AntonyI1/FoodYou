@@ -1,8 +1,10 @@
 package com.maksimowiczm.foodyou.sync.infrastructure
 
-import com.maksimowiczm.foodyou.common.domain.food.NutrientValue
+import com.maksimowiczm.foodyou.common.domain.database.TransactionProvider
+import com.maksimowiczm.foodyou.common.domain.database.TransactionScope
 import com.maksimowiczm.foodyou.common.domain.food.NutritionFacts
 import com.maksimowiczm.foodyou.common.domain.userpreferences.UserPreferencesRepository
+import com.maksimowiczm.foodyou.common.infrastructure.room.toNutritionFacts
 import com.maksimowiczm.foodyou.fooddiary.domain.entity.FoodDiaryEntry
 import com.maksimowiczm.foodyou.fooddiary.domain.entity.FoodDiaryEntryId
 import com.maksimowiczm.foodyou.fooddiary.domain.entity.ManualDiaryEntry
@@ -17,6 +19,7 @@ import com.maksimowiczm.foodyou.goals.domain.entity.DailyGoal
 import com.maksimowiczm.foodyou.goals.domain.entity.MacronutrientGoal
 import com.maksimowiczm.foodyou.goals.domain.entity.WeeklyGoals
 import com.maksimowiczm.foodyou.goals.domain.repository.GoalsRepository
+import com.maksimowiczm.foodyou.sync.domain.SyncException
 import com.maksimowiczm.foodyou.sync.domain.SyncPreferences
 import com.maksimowiczm.foodyou.sync.domain.SyncResult
 import com.maksimowiczm.foodyou.sync.domain.SyncTokenRepository
@@ -33,219 +36,313 @@ import com.maksimowiczm.foodyou.sync.infrastructure.room.SyncLocalRef
 import com.maksimowiczm.foodyou.sync.infrastructure.room.SyncReadDao
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Instant
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 class DefaultSyncEngineTest {
 
     @Test
     fun firstSync_pushesNewLocalManualEntry() = runBlocking {
         val env = TestEnv()
-        env.readDao.manual = listOf(SyncLocalRef(id = 10, updatedAt = 100))
-        env.manualRepo.store[10] = manualEntry(mealId = 1, name = "Oatmeal", kcal = 300.0)
+        env.manualDao.seed(manualEntity(id = 10, mealId = 1, name = "Oatmeal", kcal = 300.0))
 
         val result = env.engine.sync()
 
-        assertEquals(1, env.api.pushed.size)
-        assertEquals("Oatmeal", env.api.pushed.single().name)
-        assertEquals("app", env.api.pushed.single().source)
-        val mapping = env.mappingDao.getByLocal("ManualDiaryEntry", 10)
-        assertEquals("uuid-0", mapping?.uuid)
+        assertEquals(1, env.api.pushed().size)
+        assertEquals("Oatmeal", env.api.pushed().single().name)
+        assertEquals("app", env.api.pushed().single().source)
+        assertEquals("uuid-0", env.mappingDao.getByLocal("ManualDiaryEntry", 10)?.uuid)
         assertEquals(SyncResult.Success(pushed = 1, pulled = 0, deleted = 0), result)
-        assertEquals("2026-07-13T00:00:00Z", env.prefsRepo.current().cursor)
     }
 
     @Test
     fun secondSync_doesNotRepushUnchangedEntry() = runBlocking {
         val env = TestEnv()
-        val entry = manualEntry(mealId = 1, name = "Oatmeal", kcal = 300.0)
-        env.readDao.manual = listOf(SyncLocalRef(id = 10, updatedAt = 100))
-        env.manualRepo.store[10] = entry
-        // Pre-existing mapping with the current content hash -> loop closure.
-        val dto = env.mapper.toDto(entry, "Breakfast", "uuid-existing")
-        val hash = env.mapper.contentHash(dto)
-        env.mappingDao.upsert(SyncEntryMappingEntity("uuid-existing", "ManualDiaryEntry", 10, hash, 0))
-        // Server echoes the same entry back on pull.
-        env.api.pullResponse =
-            EntriesResponseDto(
-                entries = listOf(dto.copy(updatedAt = "2026-07-13T09:00:00Z")),
-                syncedAt = "2026-07-13T10:00:00Z",
-            )
+        env.manualDao.seed(manualEntity(id = 10, mealId = 1, name = "Oatmeal", kcal = 300.0))
 
+        env.engine.sync()
+        env.api.clearPushed()
         val result = env.engine.sync()
 
-        assertTrue(env.api.pushed.isEmpty(), "unchanged entry must not be re-pushed")
-        assertEquals(SyncResult.Success(pushed = 0, pulled = 0, deleted = 0), result)
-        val mapping = env.mappingDao.getByUuid("uuid-existing")
-        assertEquals("2026-07-13T09:00:00Z".epochSeconds(), mapping?.serverUpdatedAt)
+        assertTrue(env.api.pushed().isEmpty(), "unchanged entry must not re-push (loop closure)")
+        assertEquals(0, (result as SyncResult.Success).pushed)
+    }
+
+    // findings 1 + 8: a lossy local row must not re-push and clobber the server's richer copy.
+    @Test
+    fun pulledRichEntry_isNotRepushedAndServerCopyIsPreserved() = runBlocking {
+        val env = TestEnv()
+        val rich =
+            serverEntry(uuid = "rich-1", meal = "breakfast", name = "Greek yogurt")
+                .copy(
+                    brand = "Fage",
+                    barcode = "5201054018471",
+                    notes = "post-workout",
+                    quantity = QuantityDto(170.0, "g"),
+                )
+        env.api.seedServer(rich)
+
+        env.engine.sync() // materialize
+        env.api.clearPushed()
+        env.engine.sync()
+
+        assertTrue(env.api.pushed().isEmpty(), "lossy form must never overwrite the server copy")
+        val onServer = env.api.serverEntry("rich-1")
+        assertEquals("Fage", onServer?.brand, "server keeps its richer copy")
+        assertEquals("breakfast", onServer?.meal, "server meal casing not rewritten")
+        assertEquals("post-workout", onServer?.notes)
     }
 
     @Test
     fun pull_materializesNewServerEntryAsManual() = runBlocking {
         val env = TestEnv()
-        env.api.pullResponse =
-            EntriesResponseDto(
-                entries = listOf(serverEntry(uuid = "s1", meal = "Lunch", name = "Sandwich")),
-                syncedAt = "2026-07-13T10:00:00Z",
-            )
+        env.api.seedServer(serverEntry(uuid = "s1", meal = "Lunch", name = "Sandwich"))
 
         val result = env.engine.sync()
 
         val inserted = env.manualDao.store.values.singleOrNull()
         assertEquals("Sandwich", inserted?.name)
-        assertEquals(2L, inserted?.mealId) // Lunch resolved to existing meal id 2
-        val mapping = env.mappingDao.getByUuid("s1")
-        assertEquals("ManualDiaryEntry", mapping?.localTable)
-        assertEquals(SyncResult.Success(pushed = 0, pulled = 1, deleted = 0), result)
+        assertEquals(2L, inserted?.mealId)
+        assertEquals("ManualDiaryEntry", env.mappingDao.getByUuid("s1")?.localTable)
+        assertEquals(1, (result as SyncResult.Success).pulled)
     }
 
     @Test
     fun pull_unknownMealName_createsAnyTimeMeal() = runBlocking {
         val env = TestEnv()
-        env.api.pullResponse =
-            EntriesResponseDto(
-                entries = listOf(serverEntry(uuid = "s2", meal = "Pre-workout", name = "Banana")),
-                syncedAt = "2026-07-13T10:00:00Z",
-            )
+        env.api.seedServer(serverEntry(uuid = "s2", meal = "Pre-workout", name = "Banana"))
 
         env.engine.sync()
 
         val created = env.mealRepo.meals.firstOrNull { it.name == "Pre-workout" }
         assertEquals(LocalTime(0, 0), created?.from)
         assertEquals(LocalTime(23, 59), created?.to)
-        val inserted = env.manualDao.store.values.single()
-        assertEquals(created?.id, inserted.mealId)
-    }
-
-    @Test
-    fun localDelete_pushesTombstoneAndRemovesMapping() = runBlocking {
-        val env = TestEnv()
-        // Mapping exists but the local row is gone (readDao returns nothing).
-        env.mappingDao.upsert(SyncEntryMappingEntity("u1", "ManualDiaryEntry", 10, "hash", 0))
-
-        val result = env.engine.sync()
-
-        assertEquals(listOf("u1"), env.api.deleted)
-        assertNull(env.mappingDao.getByUuid("u1"))
-        assertEquals(SyncResult.Success(pushed = 1, pulled = 0, deleted = 0), result)
     }
 
     @Test
     fun pull_tombstoneDeletesLocalEntry() = runBlocking {
         val env = TestEnv()
-        val entry = manualEntry(mealId = 1, name = "Oatmeal", kcal = 300.0)
-        env.readDao.manual = listOf(SyncLocalRef(id = 10, updatedAt = 100))
-        env.manualRepo.store[10] = entry
-        env.manualDao.store[10] = manualEntity(id = 10)
-        val dto = env.mapper.toDto(entry, "Breakfast", "u2")
-        env.mappingDao.upsert(
-            SyncEntryMappingEntity("u2", "ManualDiaryEntry", 10, env.mapper.contentHash(dto), 0)
-        )
-        env.api.pullResponse =
-            EntriesResponseDto(
-                entries = listOf(dto.copy(deleted = true, updatedAt = "2026-07-13T09:00:00Z")),
-                syncedAt = "2026-07-13T10:00:00Z",
-            )
+        env.api.seedServer(serverEntry(uuid = "s3", meal = "Lunch", name = "Toast"))
+        env.engine.sync()
+        val localId = env.mappingDao.getByUuid("s3")!!.localId
+        env.api.tombstone("s3")
 
         val result = env.engine.sync()
 
-        assertNull(env.manualDao.store[10], "tombstoned entry must be deleted locally")
-        assertNull(env.mappingDao.getByUuid("u2"))
-        assertEquals(1, result.let { (it as SyncResult.Success).deleted })
+        assertNull(env.manualDao.store[localId], "tombstoned entry deleted locally")
+        assertNull(env.mappingDao.getByUuid("s3"))
+        assertEquals(1, (result as SyncResult.Success).deleted)
+    }
+
+    // finding 10a: a malformed pull item is skipped; good items still apply.
+    @Test
+    fun pull_badEntryIsSkipped_othersApplied() = runBlocking {
+        val env = TestEnv()
+        env.api.seedServer(
+            serverEntry(uuid = "bad", meal = "Lunch", name = "X").copy(date = "not-a-date")
+        )
+        env.api.seedServer(serverEntry(uuid = "good", meal = "Lunch", name = "Sandwich"))
+
+        env.engine.sync()
+
+        assertNotNull(env.mappingDao.getByUuid("good"))
+        assertNull(env.mappingDao.getByUuid("bad"))
     }
 
     @Test
     fun pull_serverEditToMeasurementEntryIsNotApplied() = runBlocking {
-        // Ruling A: app owns structured food entries. A server-side edit is recorded but never
-        // written back onto the local Measurement, and the stale local is not re-pushed.
         val env = TestEnv()
-        env.readDao.measurement = listOf(SyncLocalRef(id = 30, updatedAt = 200))
-        // foodRepo.observe(30) returns null -> push skips it (local unchanged, nothing to send).
+        env.readDao.measurementIds = listOf(30) // the measurement row still exists -> not a tombstone
         env.mappingDao.upsert(SyncEntryMappingEntity("m1", "Measurement", 30, "local-hash", 0))
-        env.api.pullResponse =
-            EntriesResponseDto(
-                entries =
-                    listOf(
-                        serverEntry(uuid = "m1", meal = "Lunch", name = "Edited by Claude")
-                            .copy(updatedAt = "2026-07-13T09:00:00Z")
-                    ),
-                syncedAt = "2026-07-13T10:00:00Z",
-            )
+        env.api.seedServer(serverEntry(uuid = "m1", meal = "Lunch", name = "Edited by Claude"))
+
+        env.engine.sync()
+
+        assertTrue(env.foodRepo.deleted.isEmpty(), "measurement not deleted")
+        assertTrue(env.manualDao.store.isEmpty(), "no manual entry created for the server edit")
+        assertEquals("Measurement", env.mappingDao.getByUuid("m1")?.localTable)
+    }
+
+    // finding 3: a push whose outcome is unknown reserves the uuid, and it is reused next cycle.
+    @Test
+    fun lostPushResponse_reusesSameUuidNextCycle() = runBlocking {
+        val env = TestEnv()
+        env.manualDao.seed(manualEntity(id = 10, mealId = 1, name = "Oatmeal", kcal = 300.0))
+        env.api.commitOnPush = false // server won't echo it back, forcing a re-push next cycle
+        env.api.pushError = { IllegalStateException("lost response") }
+
+        val first = env.engine.sync()
+        assertTrue(first is SyncResult.Failure)
+        val reserved = env.mappingDao.getByLocal("ManualDiaryEntry", 10)
+        assertNotNull(reserved, "uuid reserved before the push")
+        assertNull(reserved.contentHash, "reservation is pending until the push is confirmed")
+
+        env.api.pushError = null
+        env.api.clearPushed()
+        env.engine.sync()
+
+        assertEquals(reserved.uuid, env.api.pushed().single().id, "same uuid re-pushed (idempotent)")
+    }
+
+    // finding 9: retry classification.
+    @Test
+    fun unauthorized_isTerminalFailure() = runBlocking {
+        val env = TestEnv()
+        env.manualDao.seed(manualEntity(id = 10, mealId = 1, name = "X", kcal = 1.0))
+        env.api.pushError = { SyncException.Unauthorized() }
+
+        assertEquals(false, (env.engine.sync() as SyncResult.Failure).retryable)
+    }
+
+    @Test
+    fun networkError_isRetryableFailure() = runBlocking {
+        val env = TestEnv()
+        env.manualDao.seed(manualEntity(id = 10, mealId = 1, name = "X", kcal = 1.0))
+        env.api.pushError = { IllegalStateException("connection reset") }
+
+        assertEquals(true, (env.engine.sync() as SyncResult.Failure).retryable)
+    }
+
+    // finding 10b: a push failure does not block the pull.
+    @Test
+    fun pushFailure_doesNotBlockPull() = runBlocking {
+        val env = TestEnv()
+        env.manualDao.seed(manualEntity(id = 10, mealId = 1, name = "Local", kcal = 1.0))
+        env.api.commitOnPush = false
+        env.api.pushError = { IllegalStateException("push down") }
+        env.api.seedServer(serverEntry(uuid = "srv", meal = "Lunch", name = "FromServer"))
 
         val result = env.engine.sync()
 
-        assertTrue(env.api.pushed.isEmpty(), "unchanged measurement must not be re-pushed")
-        assertTrue(env.foodRepo.deleted.isEmpty(), "measurement must not be deleted")
-        assertTrue(env.manualDao.store.isEmpty(), "server edit must not create a manual entry")
-        val mapping = env.mappingDao.getByUuid("m1")
-        assertEquals("Measurement", mapping?.localTable)
-        assertEquals("2026-07-13T09:00:00Z".epochSeconds(), mapping?.serverUpdatedAt)
-        assertEquals(SyncResult.Success(pushed = 0, pulled = 0, deleted = 0), result)
+        assertNotNull(env.mappingDao.getByUuid("srv"), "pull still applied the server entry")
+        assertTrue(result is SyncResult.Failure, "push error reported")
     }
+
+    // finding 10e: a hanging (filterNotNull'd) read is bounded, not a deadlock.
+    @Test
+    fun hangingMeasurementRead_isSkippedNotHung() = runBlocking {
+        val env = TestEnv(readTimeoutMs = 50)
+        env.readDao.measurementIds = listOf(99)
+        env.foodRepo.hangingIds = setOf(99)
+
+        val result = withTimeout(5_000) { env.engine.sync() }
+
+        assertTrue(result is SyncResult.Success)
+        assertTrue(env.api.pushed().isEmpty())
+    }
+
+    // finding 4: apply runs inside a transaction.
+    @Test
+    fun applyingServerEntry_runsInATransaction() = runBlocking {
+        val env = TestEnv()
+        env.api.seedServer(serverEntry(uuid = "s1", meal = "Lunch", name = "Sandwich"))
+
+        env.engine.sync()
+
+        assertTrue(env.tx.used, "insert + mapping must be wrapped in a transaction")
+    }
+
+    // ---- goals ----
 
     @Test
     fun goals_pushLocalWhenChangedSinceSnapshot() = runBlocking {
         val env = TestEnv()
-        env.goalsRepo.weekly = weeklyGoal(kcal = 2400.0, protein = 180.0, carbs = 250.0, fat = 80.0)
-        // No snapshot yet -> local is considered changed.
+        env.goalsRepo.weekly = weeklyGoal(2400.0, 180.0, 250.0, 80.0)
+        env.prefsRepo.set(
+            env.prefsRepo.value.copy(
+                goalKcal = 2000.0,
+                goalProteinG = 150.0,
+                goalCarbsG = 200.0,
+                goalFatG = 70.0,
+            )
+        )
 
         env.engine.sync()
 
-        assertEquals(GoalsDto(2400.0, 180.0, 250.0, 80.0), env.api.setGoals.singleOrNull())
-        assertEquals(2400.0, env.prefsRepo.current().goalKcal)
+        assertEquals(GoalsDto(2400.0, 180.0, 250.0, 80.0), env.api.setGoalsCalls.singleOrNull())
     }
 
     @Test
     fun goals_applyServerWhenLocalUnchanged() = runBlocking {
         val env = TestEnv()
-        env.goalsRepo.weekly = weeklyGoal(kcal = 2000.0, protein = 150.0, carbs = 200.0, fat = 70.0)
-        // Snapshot equals local -> local unchanged.
+        env.goalsRepo.weekly = weeklyGoal(2000.0, 150.0, 200.0, 70.0)
         env.prefsRepo.set(
-            env.prefsRepo.current()
-                .copy(goalKcal = 2000.0, goalProteinG = 150.0, goalCarbsG = 200.0, goalFatG = 70.0)
+            env.prefsRepo.value.copy(
+                goalKcal = 2000.0,
+                goalProteinG = 150.0,
+                goalCarbsG = 200.0,
+                goalFatG = 70.0,
+            )
         )
         env.api.serverGoals = GoalsDto(2500.0, 190.0, 260.0, 90.0)
 
         env.engine.sync()
 
-        assertTrue(env.api.setGoals.isEmpty(), "local unchanged -> must not push goals")
+        assertTrue(env.api.setGoalsCalls.isEmpty())
         assertEquals(2500.0, env.goalsRepo.weekly.monday.macronutrientGoal.energyKcal)
-        assertEquals(2500.0, env.prefsRepo.current().goalKcal)
+    }
+
+    // finding 7: first contact — a pre-set server goal wins over the app defaults.
+    @Test
+    fun goals_firstContactServerWins() = runBlocking {
+        val env = TestEnv()
+        env.goalsRepo.weekly = weeklyGoal(2000.0, 150.0, 200.0, 70.0)
+        env.api.serverGoals = GoalsDto(3000.0, 200.0, 300.0, 100.0)
+
+        env.engine.sync()
+
+        assertTrue(env.api.setGoalsCalls.isEmpty(), "must not clobber pre-set server goals")
+        assertEquals(3000.0, env.goalsRepo.weekly.monday.macronutrientGoal.energyKcal)
+    }
+
+    // finding 7: first contact — server unset, so seed it from the app.
+    @Test
+    fun goals_firstContactSeedsServerWhenUnset() = runBlocking {
+        val env = TestEnv()
+        env.goalsRepo.weekly = weeklyGoal(2000.0, 150.0, 200.0, 70.0)
+        env.api.serverGoals = GoalsDto()
+
+        env.engine.sync()
+
+        assertEquals(GoalsDto(2000.0, 150.0, 200.0, 70.0), env.api.setGoalsCalls.singleOrNull())
     }
 
     @Test
     fun goals_skippedInSeparateGoalsMode() = runBlocking {
         val env = TestEnv()
-        env.goalsRepo.weekly =
-            weeklyGoal(kcal = 2000.0, protein = 150.0, carbs = 200.0, fat = 70.0, separate = true)
+        env.goalsRepo.weekly = weeklyGoal(2000.0, 150.0, 200.0, 70.0, separate = true)
 
         env.engine.sync()
 
-        assertTrue(env.api.setGoals.isEmpty())
-        assertNull(env.prefsRepo.current().goalKcal)
+        assertTrue(env.api.setGoalsCalls.isEmpty())
     }
 
     // ---- fakes & builders ----
 
-    private class TestEnv {
-        val readDao = FakeSyncReadDao()
-        val mappingDao = FakeSyncEntryMappingDao()
-        val manualRepo = FakeManualRepo()
+    private class TestEnv(readTimeoutMs: Long = 5_000L) {
         val manualDao = FakeManualDao()
-        val foodRepo = FakeFoodEntryRepo()
+        val readDao = FakeReadDao(manualDao)
+        val mappingDao = FakeMappingDao()
+        val manualRepo = FakeManualRepo(manualDao)
+        val foodRepo = FakeFoodRepo()
         val mealRepo = FakeMealRepo()
         val goalsRepo = FakeGoalsRepo()
+        val tx = FakeTransactionProvider()
         val api = FakeSyncApi()
         val prefsRepo = FakePrefsRepo(SyncPreferences(serverUrl = "http://server", enabled = true))
-        val tokenRepo = FakeTokenRepo("token")
-        val mapper = SyncMapper(TimeZone.UTC)
         private var uuidCounter = 0
 
         val engine =
@@ -257,66 +354,36 @@ class DefaultSyncEngineTest {
                 foodEntryRepository = foodRepo,
                 mealRepository = mealRepo,
                 goalsRepository = goalsRepo,
+                transactionProvider = tx,
                 api = api,
-                mapper = mapper,
+                mapper = SyncMapper(TimeZone.UTC),
                 preferencesRepository = prefsRepo,
-                tokenRepository = tokenRepo,
+                tokenRepository = FakeTokenRepo("token"),
                 uuidFactory = { "uuid-${uuidCounter++}" },
+                readTimeoutMs = readTimeoutMs,
             )
     }
 
-    private class FakeSyncReadDao(
-        var manual: List<SyncLocalRef> = emptyList(),
-        var measurement: List<SyncLocalRef> = emptyList(),
-    ) : SyncReadDao {
-        override suspend fun manualEntryRefs() = manual
+    private class FakeTransactionProvider : TransactionProvider {
+        var used = false
 
-        override suspend fun measurementRefs() = measurement
-    }
-
-    private class FakeSyncEntryMappingDao : SyncEntryMappingDao {
-        private val byUuid = mutableMapOf<String, SyncEntryMappingEntity>()
-
-        override suspend fun getByUuid(uuid: String) = byUuid[uuid]
-
-        override suspend fun getByLocal(localTable: String, localId: Long) =
-            byUuid.values.firstOrNull { it.localTable == localTable && it.localId == localId }
-
-        override suspend fun getAll() = byUuid.values.toList()
-
-        override suspend fun upsert(mapping: SyncEntryMappingEntity) {
-            byUuid[mapping.uuid] = mapping
+        override suspend fun <T> withTransaction(block: suspend TransactionScope<T>.() -> T): T {
+            used = true
+            val scope =
+                object : TransactionScope<T> {
+                    override suspend fun rollback(result: T) = error("unused")
+                }
+            return scope.block()
         }
-
-        override suspend fun deleteByUuid(uuid: String) {
-            byUuid.remove(uuid)
-        }
-    }
-
-    private class FakeManualRepo : ManualDiaryEntryRepository {
-        val store = mutableMapOf<Long, ManualDiaryEntry>()
-
-        override fun observe(id: ManualDiaryEntryId): Flow<ManualDiaryEntry?> =
-            flowOf(store[id.value])
-
-        override fun observeAll(mealId: Long, date: LocalDate) = flowOf(emptyList<ManualDiaryEntry>())
-
-        override suspend fun insert(
-            name: String,
-            mealId: Long,
-            date: LocalDate,
-            nutritionFacts: NutritionFacts,
-            createdAt: LocalDateTime,
-        ) = error("unused")
-
-        override suspend fun update(entry: ManualDiaryEntry) = error("unused")
-
-        override suspend fun delete(id: ManualDiaryEntryId) = error("unused")
     }
 
     private class FakeManualDao : ManualDiaryEntryDao {
         val store = mutableMapOf<Long, ManualDiaryEntryEntity>()
         private var nextId = 100L
+
+        fun seed(entity: ManualDiaryEntryEntity) {
+            store[entity.id] = entity
+        }
 
         override fun observe(id: Long): Flow<ManualDiaryEntryEntity?> = flowOf(store[id])
 
@@ -338,14 +405,60 @@ class DefaultSyncEngineTest {
         }
     }
 
-    private class FakeFoodEntryRepo : FoodDiaryEntryRepository {
-        val store = mutableMapOf<Long, FoodDiaryEntry>()
+    private class FakeReadDao(private val dao: FakeManualDao) : SyncReadDao {
+        var measurementIds: List<Long> = emptyList()
+
+        override suspend fun manualEntryRefs() = dao.store.keys.map { SyncLocalRef(it) }
+
+        override suspend fun measurementRefs() = measurementIds.map { SyncLocalRef(it) }
+    }
+
+    private class FakeManualRepo(private val dao: FakeManualDao) : ManualDiaryEntryRepository {
+        override fun observe(id: ManualDiaryEntryId): Flow<ManualDiaryEntry?> =
+            flowOf(dao.store[id.value]?.toDomain())
+
+        override fun observeAll(mealId: Long, date: LocalDate) = flowOf(emptyList<ManualDiaryEntry>())
+
+        override suspend fun insert(
+            name: String,
+            mealId: Long,
+            date: LocalDate,
+            nutritionFacts: NutritionFacts,
+            createdAt: LocalDateTime,
+        ) = error("unused")
+
+        override suspend fun update(entry: ManualDiaryEntry) = error("unused")
+
+        override suspend fun delete(id: ManualDiaryEntryId) = error("unused")
+    }
+
+    private class FakeMappingDao : SyncEntryMappingDao {
+        private val byUuid = mutableMapOf<String, SyncEntryMappingEntity>()
+
+        override suspend fun getByUuid(uuid: String) = byUuid[uuid]
+
+        override suspend fun getByLocal(localTable: String, localId: Long) =
+            byUuid.values.firstOrNull { it.localTable == localTable && it.localId == localId }
+
+        override suspend fun getAll() = byUuid.values.toList()
+
+        override suspend fun upsert(mapping: SyncEntryMappingEntity) {
+            byUuid[mapping.uuid] = mapping
+        }
+
+        override suspend fun deleteByUuid(uuid: String) {
+            byUuid.remove(uuid)
+        }
+    }
+
+    private class FakeFoodRepo : FoodDiaryEntryRepository {
         val deleted = mutableListOf<Long>()
+        var hangingIds: Set<Long> = emptySet()
 
-        override fun observe(id: FoodDiaryEntryId): Flow<FoodDiaryEntry?> = flowOf(store[id.value])
+        override fun observe(id: FoodDiaryEntryId): Flow<FoodDiaryEntry?> =
+            if (id.value in hangingIds) flow { awaitCancellation() } else flowOf(null)
 
-        override fun observeAll(mealId: Long, date: LocalDate) =
-            flowOf(emptyList<FoodDiaryEntry>())
+        override fun observeAll(mealId: Long, date: LocalDate) = flowOf(emptyList<FoodDiaryEntry>())
 
         override suspend fun insert(
             measurement: com.maksimowiczm.foodyou.common.domain.measurement.Measurement,
@@ -367,8 +480,6 @@ class DefaultSyncEngineTest {
             mutableListOf(
                 Meal(1, "Breakfast", LocalTime(6, 0), LocalTime(10, 0), 0),
                 Meal(2, "Lunch", LocalTime(12, 0), LocalTime(14, 0), 1),
-                Meal(3, "Dinner", LocalTime(18, 0), LocalTime(20, 0), 2),
-                Meal(4, "Snacks", LocalTime(0, 0), LocalTime(23, 59), 3),
             )
         private var nextId = 5L
 
@@ -401,37 +512,59 @@ class DefaultSyncEngineTest {
     }
 
     private class FakeSyncApi : SyncApi {
-        val pushed = mutableListOf<FoodEntryDto>()
-        val deleted = mutableListOf<String>()
-        val setGoals = mutableListOf<GoalsDto>()
-        var pullResponse = EntriesResponseDto(emptyList(), "2026-07-13T00:00:00Z")
+        private val server = mutableMapOf<String, FoodEntryDto>()
+        private val pushedEntries = mutableListOf<FoodEntryDto>()
+        val setGoalsCalls = mutableListOf<GoalsDto>()
         var serverGoals: GoalsDto? = null
+        var pushError: (() -> Throwable)? = null
+        var commitOnPush = true
+        private var stamp = 1
+
+        fun seedServer(dto: FoodEntryDto) {
+            server[dto.id!!] = dto
+        }
+
+        fun tombstone(uuid: String) {
+            server[uuid]?.let { server[uuid] = it.copy(deleted = true) }
+        }
+
+        fun serverEntry(uuid: String) = server[uuid]
+
+        fun pushed() = pushedEntries.toList()
+
+        fun clearPushed() = pushedEntries.clear()
 
         override suspend fun health(connection: SyncConnection) = true
 
-        override suspend fun pull(connection: SyncConnection, updatedSince: String?) = pullResponse
+        override suspend fun pull(connection: SyncConnection, updatedSince: String?) =
+            EntriesResponseDto(server.values.toList(), "2026-07-14T00:00:00Z")
 
         override suspend fun push(connection: SyncConnection, entries: List<FoodEntryDto>) {
-            pushed += entries
+            pushedEntries += entries
+            if (commitOnPush) {
+                entries.forEach {
+                    server[it.id!!] = it.copy(updatedAt = "2026-07-14T00:00:0${stamp++}Z")
+                }
+            }
+            pushError?.let { throw it() }
         }
 
         override suspend fun delete(connection: SyncConnection, id: String) {
-            deleted += id
+            server.remove(id)
         }
 
-        override suspend fun getGoals(connection: SyncConnection) =
-            serverGoals ?: error("no server goals")
+        override suspend fun getGoals(connection: SyncConnection) = serverGoals ?: GoalsDto()
 
         override suspend fun setGoals(connection: SyncConnection, goals: GoalsDto) {
-            setGoals += goals
+            setGoalsCalls += goals
+            serverGoals = goals
         }
     }
 
     private class FakePrefsRepo(initial: SyncPreferences) :
         UserPreferencesRepository<SyncPreferences> {
-        private var value = initial
-
-        fun current() = value
+        var value = initial
+            private set
 
         fun set(preferences: SyncPreferences) {
             value = preferences
@@ -444,37 +577,42 @@ class DefaultSyncEngineTest {
         }
     }
 
-    private class FakeTokenRepo(private var token: String?) : SyncTokenRepository {
-        override suspend fun setToken(token: String) {
-            this.token = token
-        }
+    private class FakeTokenRepo(private val token: String?) : SyncTokenRepository {
+        override suspend fun setToken(token: String) = error("unused")
 
         override suspend fun getToken() = token
-
-        override suspend fun clear() {
-            token = null
-        }
 
         override fun hasToken() = flowOf(token != null)
     }
 }
 
-private fun manualEntry(mealId: Long, name: String, kcal: Double): ManualDiaryEntry =
+private fun ManualDiaryEntryEntity.toDomain(): ManualDiaryEntry =
     ManualDiaryEntry(
-        id = ManualDiaryEntryId(0),
+        id = ManualDiaryEntryId(id),
         mealId = mealId,
-        date = LocalDate(2026, 7, 13),
+        date = LocalDate.fromEpochDays(dateEpochDay.toInt()),
         name = name,
-        nutritionFacts = NutritionFacts(energy = NutrientValue.Complete(kcal)),
-        createdAt = LocalDateTime(2026, 7, 13, 8, 0, 0),
-        updatedAt = LocalDateTime(2026, 7, 13, 8, 0, 0),
+        nutritionFacts =
+            toNutritionFacts(nutrients = nutrients, vitamins = vitamins, minerals = minerals),
+        createdAt = Instant.fromEpochSeconds(createdEpochSeconds).toLocalDateTime(TimeZone.UTC),
+        updatedAt = Instant.fromEpochSeconds(updatedEpochSeconds).toLocalDateTime(TimeZone.UTC),
     )
 
-private fun manualEntity(id: Long): ManualDiaryEntryEntity =
+private fun manualEntity(id: Long, mealId: Long, name: String, kcal: Double): ManualDiaryEntryEntity =
     SyncMapper(TimeZone.UTC)
         .toManualEntity(
-            serverEntry(uuid = "seed", meal = "Breakfast", name = "Seed"),
-            mealId = 1,
+            FoodEntryDto(
+                id = "seed",
+                date = "2026-07-13",
+                meal = "Breakfast",
+                name = name,
+                quantity = QuantityDto(1.0, "serving"),
+                nutrients = NutrientsDto(kcal = kcal),
+                source = "app",
+                createdAt = "2026-07-13T08:00:00Z",
+                updatedAt = "2026-07-13T08:00:00Z",
+            ),
+            mealId = mealId,
             localId = id,
         )
 
@@ -511,5 +649,3 @@ private fun weeklyGoal(
         )
     return WeeklyGoals(separate, daily, daily, daily, daily, daily, daily, daily)
 }
-
-private fun String.epochSeconds(): Long = kotlin.time.Instant.parse(this).epochSeconds

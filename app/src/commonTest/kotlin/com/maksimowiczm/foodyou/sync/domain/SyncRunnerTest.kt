@@ -5,8 +5,11 @@ import com.maksimowiczm.foodyou.common.domain.userpreferences.UserPreferencesRep
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.time.Duration
 import kotlin.time.Instant
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
@@ -29,12 +32,38 @@ class SyncRunnerTest {
     @Test
     fun failure_recordsError() = runBlocking {
         val prefs = FakePrefs(SyncPreferences())
-        val runner = runner(SyncResult.Failure("boom"), prefs)
+        val runner = runner(SyncResult.Failure("boom", retryable = true), prefs)
 
         runner.runSync()
 
         assertEquals("boom", prefs.value.lastError)
         assertNull(prefs.value.lastSyncEpochSeconds)
+    }
+
+    // finding 2: a trigger arriving while a sync runs is skipped, not queued.
+    @Test
+    fun concurrentTrigger_isSkipped() = runBlocking {
+        val started = CompletableDeferred<Unit>()
+        val gate = CompletableDeferred<Unit>()
+        val engine =
+            object : SyncEngine {
+                override suspend fun sync(): SyncResult {
+                    started.complete(Unit)
+                    gate.await()
+                    return SyncResult.Success(0, 0, 0)
+                }
+
+                override suspend fun testConnection(baseUrl: String, token: String) = true
+            }
+        val runner = SyncRunner(engine, FakePrefs(SyncPreferences()), FakeDateProvider)
+
+        val first = async { runner.runSync() }
+        started.await() // the first run now holds the lock
+
+        assertEquals(SyncResult.Skipped, runner.runSync())
+
+        gate.complete(Unit)
+        assertTrue(first.await() is SyncResult.Success)
     }
 
     @Test

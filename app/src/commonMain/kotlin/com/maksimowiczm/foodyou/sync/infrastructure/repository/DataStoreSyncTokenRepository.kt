@@ -25,10 +25,6 @@ internal class DataStoreSyncTokenRepository(
         return masterCrypto.decrypt(encrypted).decodeToString()
     }
 
-    override suspend fun clear() {
-        dataStore.edit { it.remove(TOKEN_KEY) }
-    }
-
     override fun hasToken(): Flow<Boolean> = dataStore.data.map { TOKEN_KEY in it }
 
     private companion object {

@@ -2,16 +2,20 @@ package com.maksimowiczm.foodyou.sync.infrastructure
 
 import com.maksimowiczm.foodyou.common.domain.food.NutrientValue
 import com.maksimowiczm.foodyou.common.domain.food.NutritionFacts
+import com.maksimowiczm.foodyou.common.domain.measurement.Measurement
 import com.maksimowiczm.foodyou.fooddiary.domain.entity.ManualDiaryEntry
 import com.maksimowiczm.foodyou.fooddiary.domain.entity.ManualDiaryEntryId
 import com.maksimowiczm.foodyou.goals.domain.entity.MacronutrientGoal
 import com.maksimowiczm.foodyou.sync.infrastructure.api.FoodEntryDto
+import com.maksimowiczm.foodyou.sync.infrastructure.api.GoalsDto
 import com.maksimowiczm.foodyou.sync.infrastructure.api.NutrientsDto
 import com.maksimowiczm.foodyou.sync.infrastructure.api.QuantityDto
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
@@ -142,10 +146,58 @@ class SyncMapperTest {
         assertEquals(80.0, dto.fatG)
 
         val back = mapper.toMacronutrientGoal(dto)
+        assertNotNull(back)
         assertEquals(2400.0, back.energyKcal)
         assertEquals(180.0, back.proteinsGrams)
         assertEquals(80.0, back.fatsGrams)
         assertEquals(250.0, back.carbohydratesGrams)
+    }
+
+    // finding 5: an incomplete server goal can't be materialized.
+    @Test
+    fun toMacronutrientGoal_returnsNullForIncompleteGoal() {
+        assertNull(mapper.toMacronutrientGoal(GoalsDto(kcal = 2000.0)))
+        assertNull(mapper.toMacronutrientGoal(GoalsDto()))
+        assertNotNull(mapper.toMacronutrientGoal(GoalsDto(2000.0, 150.0, 200.0, 70.0)))
+    }
+
+    // finding 6: quantity unit is derived per measurement type.
+    @Test
+    fun measurementUnits_mapPerType() {
+        assertEquals(QuantityDto(170.0, "g"), Measurement.Gram(170.0).toQuantityDto())
+        assertEquals(QuantityDto(250.0, "ml"), Measurement.Milliliter(250.0).toQuantityDto())
+        assertEquals(QuantityDto(2.0, "serving"), Measurement.Serving(2.0).toQuantityDto())
+        assertEquals(QuantityDto(1.0, "piece"), Measurement.Package(1.0).toQuantityDto())
+        // Imperial units convert to their metric equivalent, keeping mass/volume units.
+        assertEquals("g", Measurement.Ounce(1.0).toQuantityDto().unit)
+        assertEquals("ml", Measurement.FluidOunce(1.0).toQuantityDto().unit)
+        assertTrue(Measurement.Ounce(1.0).toQuantityDto().amount > 1.0)
+    }
+
+    // findings 1 + 8: the loop-closure hash drops rich fields and uses the local meal casing.
+    @Test
+    fun localManualContentHash_stripsRichFieldsAndUsesLocalMealCasing() {
+        val rich =
+            claudeSandwichDto.copy(
+                meal = "breakfast",
+                brand = "Fage",
+                barcode = "123",
+                notes = "note",
+                quantity = QuantityDto(170.0, "g"),
+            )
+        val stripped =
+            claudeSandwichDto.copy(
+                meal = "Breakfast",
+                brand = null,
+                barcode = null,
+                notes = null,
+                quantity = QuantityDto(1.0, "serving"),
+            )
+
+        val localHash = mapper.localManualContentHash(rich, localMealName = "Breakfast")
+
+        assertEquals(mapper.contentHash(stripped), localHash)
+        assertNotEquals(mapper.contentHash(rich), localHash)
     }
 
     private companion object {

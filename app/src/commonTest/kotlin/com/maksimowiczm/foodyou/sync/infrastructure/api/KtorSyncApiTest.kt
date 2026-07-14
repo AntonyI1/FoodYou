@@ -9,9 +9,12 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import com.maksimowiczm.foodyou.common.config.NetworkConfig
+import com.maksimowiczm.foodyou.sync.domain.SyncException
 import io.ktor.serialization.kotlinx.json.json
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
@@ -107,6 +110,41 @@ class KtorSyncApiTest {
         assertFalse(down.health(connection))
     }
 
+    // finding 10c: a 401 surfaces as a typed error, not a serialization failure on the error body.
+    @Test
+    fun unauthorized_throwsTypedError() = runBlocking {
+        val api =
+            apiReturning({}) {
+                respond(
+                    """{"error":"unauthorized"}""",
+                    HttpStatusCode.Unauthorized,
+                    headersOf(HttpHeaders.ContentType, "application/json"),
+                )
+            }
+
+        assertFailsWith<SyncException.Unauthorized> { api.pull(connection, null) }
+        Unit
+    }
+
+    // finding 10d: deleting an already-gone entry is success (the tombstone goal is met).
+    @Test
+    fun delete_notFound_isTreatedAsSuccess() = runBlocking {
+        val api = apiReturning({}) { respond("", HttpStatusCode.NotFound) }
+
+        api.delete(connection, "already-gone") // must not throw
+    }
+
+    // finding 5: goals with null fields parse (server returns null for unset targets).
+    @Test
+    fun getGoals_parsesNullFields() = runBlocking {
+        val api =
+            apiReturning({}) {
+                respondJson("""{"kcal":null,"protein_g":null,"carbs_g":null,"fat_g":null}""")
+            }
+
+        assertEquals(GoalsDto(), api.getGoals(connection))
+    }
+
     private fun apiReturning(
         capture: (HttpRequestData) -> Unit,
         handler: io.ktor.client.engine.mock.MockRequestHandleScope.() -> io.ktor.client.request.HttpResponseData,
@@ -120,7 +158,11 @@ class KtorSyncApiTest {
             ) {
                 install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
             }
-        return KtorSyncApi(client)
+        return KtorSyncApi(client, FakeNetworkConfig)
+    }
+
+    private object FakeNetworkConfig : NetworkConfig {
+        override val userAgent = "FoodYou-Test"
     }
 
     private fun io.ktor.client.engine.mock.MockRequestHandleScope.respondJson(body: String) =

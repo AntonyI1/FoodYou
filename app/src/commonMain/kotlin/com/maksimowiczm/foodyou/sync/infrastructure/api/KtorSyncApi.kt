@@ -1,7 +1,10 @@
 package com.maksimowiczm.foodyou.sync.infrastructure.api
 
+import com.maksimowiczm.foodyou.common.config.NetworkConfig
+import com.maksimowiczm.foodyou.sync.domain.SyncException
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
@@ -9,14 +12,20 @@ import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.HttpResponse
 import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import io.ktor.http.userAgent
 
-internal class KtorSyncApi(private val client: HttpClient) : SyncApi {
+internal class KtorSyncApi(
+    private val client: HttpClient,
+    private val networkConfig: NetworkConfig,
+) : SyncApi {
 
     override suspend fun health(connection: SyncConnection): Boolean =
-        client.get(url(connection, "health")).status.isSuccess()
+        client.get(url(connection, "health")) { common(connection, auth = false) }.status.isSuccess()
 
     override suspend fun pull(
         connection: SyncConnection,
@@ -24,39 +33,60 @@ internal class KtorSyncApi(private val client: HttpClient) : SyncApi {
     ): EntriesResponseDto =
         client
             .get(url(connection, "entries")) {
-                bearerAuth(connection.token)
+                common(connection)
                 parameter("include_deleted", "true")
                 updatedSince?.let { parameter("updated_since", it) }
             }
+            .checked()
             .body()
 
     override suspend fun push(connection: SyncConnection, entries: List<FoodEntryDto>) {
-        val response =
-            client.post(url(connection, "entries")) {
-                bearerAuth(connection.token)
+        client
+            .post(url(connection, "entries")) {
+                common(connection)
                 contentType(ContentType.Application.Json)
                 setBody(BulkEntriesDto(entries))
             }
-        check(response.status.isSuccess()) { "Push failed: ${response.status}" }
+            .checked()
     }
 
     override suspend fun delete(connection: SyncConnection, id: String) {
-        val response =
-            client.delete(url(connection, "entries/$id")) { bearerAuth(connection.token) }
-        check(response.status.isSuccess()) { "Delete failed: ${response.status}" }
+        val response = client.delete(url(connection, "entries/$id")) { common(connection) }
+        // Already gone is success — the tombstone goal is achieved (item 10d).
+        if (response.status == HttpStatusCode.NotFound) return
+        response.checked()
     }
 
     override suspend fun getGoals(connection: SyncConnection): GoalsDto =
-        client.get(url(connection, "goals")) { bearerAuth(connection.token) }.body()
+        client.get(url(connection, "goals")) { common(connection) }.checked().body()
 
     override suspend fun setGoals(connection: SyncConnection, goals: GoalsDto) {
-        val response =
-            client.put(url(connection, "goals")) {
-                bearerAuth(connection.token)
+        client
+            .put(url(connection, "goals")) {
+                common(connection)
                 contentType(ContentType.Application.Json)
                 setBody(goals)
             }
-        check(response.status.isSuccess()) { "Set goals failed: ${response.status}" }
+            .checked()
+    }
+
+    private fun HttpRequestBuilder.common(connection: SyncConnection, auth: Boolean = true) {
+        userAgent(networkConfig.userAgent)
+        if (auth) bearerAuth(connection.token)
+    }
+
+    /**
+     * Map non-2xx to typed errors so a 401 surfaces as "unauthorized" rather than a cryptic
+     * serialization failure from trying to parse the error body as a success DTO (item 10c).
+     */
+    private fun HttpResponse.checked(): HttpResponse {
+        if (status.isSuccess()) return this
+        throw when {
+            status == HttpStatusCode.Unauthorized || status == HttpStatusCode.Forbidden ->
+                SyncException.Unauthorized()
+            status.value in 500..599 -> SyncException.ServerError(status.value)
+            else -> SyncException.ClientError(status.value)
+        }
     }
 
     private fun url(connection: SyncConnection, path: String) =
