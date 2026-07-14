@@ -3,6 +3,7 @@ package com.maksimowiczm.foodyou.sync.infrastructure.api
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.bearerAuth
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
@@ -37,6 +38,12 @@ internal class KtorSyncApi(private val client: HttpClient) : SyncApi {
                 setBody(BulkEntriesDto(entries))
             }
         check(response.status.isSuccess()) { "Push failed: ${response.status}" }
+    }
+
+    override suspend fun delete(connection: SyncConnection, id: String) {
+        val response =
+            client.delete(url(connection, "entries/$id")) { bearerAuth(connection.token) }
+        check(response.status.isSuccess()) { "Delete failed: ${response.status}" }
     }
 
     override suspend fun getGoals(connection: SyncConnection): GoalsDto =

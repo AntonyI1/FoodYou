@@ -18,6 +18,9 @@ interface SyncApi {
     /** Bulk upsert push: `POST /api/v1/entries` with `{entries:[...]}`. */
     suspend fun push(connection: SyncConnection, entries: List<FoodEntryDto>)
 
+    /** Soft-delete a single entry (tombstone push): `DELETE /api/v1/entries/:id`. */
+    suspend fun delete(connection: SyncConnection, id: String)
+
     /** `GET /api/v1/goals`. */
     suspend fun getGoals(connection: SyncConnection): GoalsDto
 
