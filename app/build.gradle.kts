@@ -105,6 +105,7 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
             implementation(libs.androidx.appcompat)
+            implementation(libs.androidx.glance.appwidget)
             implementation(libs.androidx.work.runtime)
             implementation(libs.koin.android)
             implementation(libs.ktor.client.okhttp)

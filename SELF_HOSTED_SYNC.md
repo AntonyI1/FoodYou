@@ -103,6 +103,36 @@ apksigner sign --alignment-preserved \
 Obtainium at your own build). The app declares only the `INTERNET` permission and bundles no Google
 Play Services.
 
+## Home-screen widget (fork feature)
+
+A 4x2 Android widget (Jetpack Glance) showing today's calories + macros, with an apple-shaped
+calorie meter. Additive, confined to the `com.maksimowiczm.foodyou.widget` package plus a manifest
+`<receiver>`. It refreshes automatically — after a sync, when the app is backgrounded, and on
+Android's periodic update — and honours the kcal/kJ setting. No GMS/FCM; the periodic update is the
+platform's own AppWidget mechanism.
+
+### Why the widget's read is wrapped in `withTimeout`
+
+**Do not remove `readTimeoutMs` from `ObserveWidgetSummaryUseCase` — it is not defensive padding.**
+
+`ObserveDiaryMealsUseCase.observe(date)` builds `combine(diaryEntries)` over one flow per meal. With
+**zero meals** that array is empty, and kotlinx-coroutines' `combineInternal` bails out on an empty
+input without emitting (`flow/internal/Combine.kt:18`, coroutines 1.10.2). The outer flow never
+completes either, because the use case combines a 1-second poller that runs forever. Net: the flow
+**never emits and never completes**, so a bare `.first()` suspends forever — inside a
+BroadcastReceiver's window, leaving the widget stuck on its loading layout permanently.
+`runCatching` does **not** catch a hang; only a timeout does.
+
+Zero meals is user-reachable: `MealSettingsViewModel.deleteMeal()` has no "keep at least one" guard.
+
+**Upstream has the same latent bug** (its home card shimmers forever in that state) and is knowingly
+**not fixed here** — `ObserveDiaryMealsUseCase` is upstream-owned and changing it would cost
+rebasability. The widget defends itself instead.
+
+The read also catches `Exception` (rethrowing `CancellationException`, per `DefaultSyncEngine`'s
+idiom): the goals blob is JSON-decoded and validated with `error(...)`/`require(...)`, and DataStore
+surfaces `IOException`, any of which would otherwise escape before Glance renders anything.
+
 ## Tests
 
 - Host JVM unit tests (`./gradlew :app:testDebugUnitTest`): `SyncMapperTest` (mapping, units, goals,
@@ -112,3 +142,7 @@ Play Services.
 - `SyncMappingMigrationTest` validates the v32→v33 auto-migration via `MigrationTestHelper`; it is
   instrumented (needs a device/emulator), so run it with `./gradlew :app:connectedDebugAndroidTest`,
   not the host suite.
+- Widget: `CalorieMeterTest` (meter math — over-goal clamp, zero/absent goal, kcal↔kJ) and
+  `ObserveWidgetSummaryUseCaseTest` (the three read failure modes: hang→timeout, throw→catch,
+  cancellation→rethrow). The apple stroking, the bitmap render and the Glance composition are
+  **on-device only** — there is no Glance/Compose UI-test harness in this repo.

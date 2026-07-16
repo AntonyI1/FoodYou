@@ -13,6 +13,7 @@ import com.maksimowiczm.foodyou.settings.settingsModule
 import com.maksimowiczm.foodyou.sponsorship.sponsorshipModule
 import com.maksimowiczm.foodyou.sync.syncModule
 import com.maksimowiczm.foodyou.theme.themeModule
+import com.maksimowiczm.foodyou.widget.widgetModule
 import kotlinx.coroutines.CoroutineScope
 import org.koin.core.context.startKoin
 import org.koin.dsl.KoinAppDeclaration
@@ -36,5 +37,6 @@ fun initKoin(applicationCoroutineScope: CoroutineScope, config: KoinAppDeclarati
             sponsorshipModule,
             syncModule,
             themeModule,
+            widgetModule,
         )
     }
