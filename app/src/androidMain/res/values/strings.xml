@@ -1,3 +1,15 @@
 <resources>
     <string name="app_name" translatable="false">Food You</string>
+
+    <!--
+      Widget strings live here rather than in shared/resources' Compose Resources: android:label and
+      android:description must be Android resources, and Compose Resources' stringResource() loads
+      asynchronously, which risks a blank string on the single frame Glance snapshots. English-only
+      is accepted - adding to upstream's 20-locale strings.xml would still be English in the other 19
+      and costs rebase friction.
+    -->
+    <string name="widget_name">Food You</string>
+    <string name="widget_description">Today\'s calories and macros</string>
+    <string name="widget_left">left</string>
+    <string name="widget_over">over</string>
 </resources>

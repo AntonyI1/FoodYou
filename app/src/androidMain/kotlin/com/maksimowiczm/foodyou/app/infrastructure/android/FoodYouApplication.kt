@@ -13,6 +13,7 @@ import com.maksimowiczm.foodyou.common.domain.userpreferences.UserPreferencesRep
 import com.maksimowiczm.foodyou.settings.domain.event.AppLaunchEvent
 import com.maksimowiczm.foodyou.sync.domain.SyncPreferences
 import com.maksimowiczm.foodyou.sync.infrastructure.work.SyncScheduling
+import com.maksimowiczm.foodyou.widget.FoodYouWidgetUpdater
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +37,7 @@ class FoodYouApplication : Application() {
         initKoin(coroutineScope) { androidContext(this@FoodYouApplication) }
         publishLaunchEvent()
         setupSync()
+        setupWidgetRefresh()
 
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { t, e ->
@@ -83,6 +85,49 @@ class FoodYouApplication : Application() {
 
                 override fun onActivityStopped(activity: Activity) {
                     if (startedActivities > 0) startedActivities--
+                }
+
+                override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) =
+                    Unit
+
+                override fun onActivityResumed(activity: Activity) = Unit
+
+                override fun onActivityPaused(activity: Activity) = Unit
+
+                override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
+
+                override fun onActivityDestroyed(activity: Activity) = Unit
+            }
+        )
+    }
+
+    /**
+     * Refreshes the widget when the app goes to the background — which is exactly when the widget
+     * becomes visible, and catches every in-app diary change (add/edit/delete/quick-add/goal edit)
+     * with one hook. This is an approximation of "on diary change": a widget visible while the app
+     * is foregrounded (split-screen) stays stale until backgrounding or the periodic update.
+     *
+     * Registered separately from [setupSync]'s callbacks rather than sharing their counter, so a
+     * widget change can never perturb sync. Application dispatches to every registered callback.
+     */
+    private fun setupWidgetRefresh() {
+        registerActivityLifecycleCallbacks(
+            object : ActivityLifecycleCallbacks {
+                private var startedActivities = 0
+
+                override fun onActivityStarted(activity: Activity) {
+                    startedActivities++
+                }
+
+                override fun onActivityStopped(activity: Activity) {
+                    if (startedActivities > 0) startedActivities--
+                    // A rotation takes the count 1 -> 0 -> 1, which is not a backgrounding; without
+                    // this it would push RemoteViews on every rotation.
+                    if (startedActivities == 0 && !activity.isChangingConfigurations) {
+                        coroutineScope.launch {
+                            FoodYouWidgetUpdater.updateAll(this@FoodYouApplication)
+                        }
+                    }
                 }
 
                 override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) =
