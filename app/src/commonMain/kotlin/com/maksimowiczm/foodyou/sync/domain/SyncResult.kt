@@ -2,8 +2,16 @@ package com.maksimowiczm.foodyou.sync.domain
 
 /** Outcome of a single sync run. */
 sealed interface SyncResult {
-    /** Sync completed; counts reflect entries pushed/pulled/deleted this run. */
-    data class Success(val pushed: Int, val pulled: Int, val deleted: Int) : SyncResult
+    /**
+     * Sync completed; counts reflect entries pushed/pulled/deleted this run, plus catalog foods
+     * pulled into "My Food" ([productsPulled]).
+     */
+    data class Success(
+        val pushed: Int,
+        val pulled: Int,
+        val deleted: Int,
+        val productsPulled: Int = 0,
+    ) : SyncResult
 
     /**
      * Sync failed. [retryable] is true for transient causes (network, timeout, 5xx) so the worker

@@ -55,6 +55,39 @@ class KtorSyncApiTest {
     }
 
     @Test
+    fun pullFoods_sendsAuthorizedGetWithoutIncludeDeletedAndParses() = runBlocking {
+        lateinit var captured: HttpRequestData
+        val api = apiReturning({ captured = it }) {
+            respondJson(
+                """
+                {"foods":[{"id":"f1","name":"Rolled oats","brand":"Bob","barcode":null,
+                "per_100g":{"kcal":389.0,"protein_g":16.9,"carbs_g":66.3,"fat_g":6.9},
+                "serving_weight_g":40.0,"package_weight_g":null,"is_liquid":false,
+                "created_at":"2026-07-13T08:00:00Z","updated_at":"2026-07-13T09:00:00Z"}],
+                "synced_at":"2026-07-13T10:00:00Z"}
+                """
+                    .trimIndent()
+            )
+        }
+
+        val response = api.pullFoods(connection, "2026-01-01T00:00:00Z")
+
+        assertEquals("2026-07-13T10:00:00Z", response.syncedAt)
+        val food = response.foods.single()
+        assertEquals("f1", food.id)
+        assertEquals("Rolled oats", food.name)
+        assertEquals(389.0, food.per100g.kcal)
+        assertEquals(40.0, food.servingWeightG)
+        assertEquals(false, food.isLiquid)
+        assertEquals(HttpMethod.Get, captured.method)
+        assertTrue(captured.url.encodedPath.endsWith("/api/v1/foods"))
+        assertEquals("Bearer tok", captured.headers[HttpHeaders.Authorization])
+        assertEquals("2026-01-01T00:00:00Z", captured.url.parameters["updated_since"])
+        // Foods sync is add/update only — it must NOT request tombstones.
+        assertEquals(null, captured.url.parameters["include_deleted"])
+    }
+
+    @Test
     fun push_sendsPostToEntriesWithBearer() = runBlocking {
         lateinit var captured: HttpRequestData
         val api = apiReturning({ captured = it }) { respond("", HttpStatusCode.OK) }

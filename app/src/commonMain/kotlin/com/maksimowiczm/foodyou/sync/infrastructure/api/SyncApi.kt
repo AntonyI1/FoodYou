@@ -15,6 +15,9 @@ interface SyncApi {
     /** Sync pull: `GET /api/v1/entries?updated_since&include_deleted=true`. */
     suspend fun pull(connection: SyncConnection, updatedSince: String?): EntriesResponseDto
 
+    /** Foods catalog pull: `GET /api/v1/foods?updated_since` (add/update only; no include_deleted). */
+    suspend fun pullFoods(connection: SyncConnection, updatedSince: String?): FoodsResponseDto
+
     /** Bulk upsert push: `POST /api/v1/entries` with `{entries:[...]}`. */
     suspend fun push(connection: SyncConnection, entries: List<FoodEntryDto>)
 

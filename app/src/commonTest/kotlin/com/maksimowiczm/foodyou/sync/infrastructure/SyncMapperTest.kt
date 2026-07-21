@@ -3,9 +3,11 @@ package com.maksimowiczm.foodyou.sync.infrastructure
 import com.maksimowiczm.foodyou.common.domain.food.NutrientValue
 import com.maksimowiczm.foodyou.common.domain.food.NutritionFacts
 import com.maksimowiczm.foodyou.common.domain.measurement.Measurement
+import com.maksimowiczm.foodyou.common.infrastructure.room.FoodSourceType
 import com.maksimowiczm.foodyou.fooddiary.domain.entity.ManualDiaryEntry
 import com.maksimowiczm.foodyou.fooddiary.domain.entity.ManualDiaryEntryId
 import com.maksimowiczm.foodyou.goals.domain.entity.MacronutrientGoal
+import com.maksimowiczm.foodyou.sync.infrastructure.api.FoodDto
 import com.maksimowiczm.foodyou.sync.infrastructure.api.FoodEntryDto
 import com.maksimowiczm.foodyou.sync.infrastructure.api.GoalsDto
 import com.maksimowiczm.foodyou.sync.infrastructure.api.NutrientsDto
@@ -198,6 +200,68 @@ class SyncMapperTest {
 
         assertEquals(mapper.contentHash(stripped), localHash)
         assertNotEquals(mapper.contentHash(rich), localHash)
+    }
+
+    @Test
+    fun toProductEntity_mapsPer100gWeightsAndLiquid_withEmptyVitaminsMinerals() {
+        val dto =
+            FoodDto(
+                id = "f1",
+                name = "Rolled oats",
+                brand = "Bob",
+                barcode = "123",
+                per100g =
+                    NutrientsDto(
+                        kcal = 389.0,
+                        proteinG = 16.9,
+                        carbsG = 66.3,
+                        fatG = 6.9,
+                        fiberG = 10.6,
+                        sugarG = 1.0,
+                        saturatedFatG = 1.2,
+                        saltG = 0.0,
+                    ),
+                servingWeightG = 40.0,
+                packageWeightG = 500.0,
+                isLiquid = false,
+                updatedAt = "2026-07-13T12:00:00Z",
+            )
+
+        val entity = mapper.toProductEntity(dto, localId = 7)
+
+        assertEquals(7L, entity.id)
+        assertEquals("Rolled oats", entity.name)
+        assertEquals("Bob", entity.brand)
+        assertEquals("123", entity.barcode)
+        assertEquals(389.0, entity.nutrients.energy)
+        assertEquals(16.9, entity.nutrients.proteins)
+        assertEquals(66.3, entity.nutrients.carbohydrates)
+        assertEquals(6.9, entity.nutrients.fats)
+        assertEquals(10.6, entity.nutrients.dietaryFiber)
+        assertEquals(1.0, entity.nutrients.sugars)
+        assertEquals(1.2, entity.nutrients.saturatedFats)
+        assertEquals(0.0, entity.nutrients.salt)
+        assertEquals(40.0, entity.servingWeight)
+        assertEquals(500.0, entity.packageWeight)
+        assertEquals(false, entity.isLiquid)
+        assertEquals(FoodSourceType.User, entity.sourceType)
+        assertNull(entity.note)
+        assertNull(entity.sourceUrl)
+        // Unmapped nutrient fields and all vitamins/minerals stay null (no enrichment).
+        assertNull(entity.nutrients.transFats)
+        assertNull(entity.nutrients.cholesterolMilli)
+        assertNull(entity.minerals.sodiumMilli)
+        assertNull(entity.vitamins.vitaminAMicro)
+    }
+
+    @Test
+    fun toProductEntity_defaultsIdToZeroForInsertAndCarriesLiquidFlag() {
+        val entity =
+            mapper.toProductEntity(FoodDto(id = "f2", name = "Milk", per100g = NutrientsDto(kcal = 42.0), isLiquid = true))
+        assertEquals(0L, entity.id)
+        assertEquals(true, entity.isLiquid)
+        assertEquals(42.0, entity.nutrients.energy)
+        assertNull(entity.nutrients.proteins)
     }
 
     private companion object {

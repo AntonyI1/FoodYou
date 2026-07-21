@@ -17,12 +17,16 @@ import com.maksimowiczm.foodyou.sync.domain.SyncException
 import com.maksimowiczm.foodyou.sync.domain.SyncPreferences
 import com.maksimowiczm.foodyou.sync.domain.SyncResult
 import com.maksimowiczm.foodyou.sync.domain.SyncTokenRepository
+import com.maksimowiczm.foodyou.sync.infrastructure.api.FoodDto
 import com.maksimowiczm.foodyou.sync.infrastructure.api.FoodEntryDto
 import com.maksimowiczm.foodyou.sync.infrastructure.api.GoalsDto
 import com.maksimowiczm.foodyou.sync.infrastructure.api.SyncApi
 import com.maksimowiczm.foodyou.sync.infrastructure.api.SyncConnection
 import com.maksimowiczm.foodyou.sync.infrastructure.room.SyncEntryMappingDao
 import com.maksimowiczm.foodyou.sync.infrastructure.room.SyncEntryMappingEntity
+import com.maksimowiczm.foodyou.sync.infrastructure.room.SyncProductDao
+import com.maksimowiczm.foodyou.sync.infrastructure.room.SyncProductMappingDao
+import com.maksimowiczm.foodyou.sync.infrastructure.room.SyncProductMappingEntity
 import com.maksimowiczm.foodyou.sync.infrastructure.room.SyncReadDao
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Instant
@@ -34,6 +38,8 @@ import kotlinx.serialization.SerializationException
 internal class DefaultSyncEngine(
     private val syncReadDao: SyncReadDao,
     private val mappingDao: SyncEntryMappingDao,
+    private val productMappingDao: SyncProductMappingDao,
+    private val syncProductDao: SyncProductDao,
     private val manualEntryRepository: ManualDiaryEntryRepository,
     // Writes go through the DAO, not the repository: pulled entries must be stored with the server's
     // exact created/updated timestamps, but the repository's insert() forces updatedAt = createdAt.
@@ -61,11 +67,12 @@ internal class DefaultSyncEngine(
         val connection = SyncConnection(preferences.serverUrl.trim(), token)
         val meals = mealRepository.observeMeals().first()
 
-        // Push and pull are independent: a push failure must not block the pull, and vice versa.
+        // Each phase is independent: a failure in one must not block the others.
         val errors = mutableListOf<Throwable>()
         var pushed = 0
         var pulled = 0
         var deleted = 0
+        var productsPulled = 0
 
         try {
             pushed = pushLocalChanges(connection, meals)
@@ -86,6 +93,14 @@ internal class DefaultSyncEngine(
         }
 
         try {
+            productsPulled = pullRemoteFoods(connection, preferences.foodsCursor)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            errors += e
+        }
+
+        try {
             syncGoals(connection)
         } catch (e: CancellationException) {
             throw e
@@ -94,7 +109,7 @@ internal class DefaultSyncEngine(
         }
 
         return if (errors.isEmpty()) {
-            SyncResult.Success(pushed = pushed, pulled = pulled, deleted = deleted)
+            SyncResult.Success(pushed = pushed, pulled = pulled, deleted = deleted, productsPulled = productsPulled)
         } else {
             SyncResult.Failure(
                 message = errors.first().message ?: "Sync failed",
@@ -277,6 +292,50 @@ internal class DefaultSyncEngine(
         when (mapping.localTable) {
             TABLE_MANUAL -> manualEntryDao.delete(mapping.localId)
             TABLE_MEASUREMENT -> foodEntryRepository.delete(FoodDiaryEntryId(mapping.localId))
+        }
+    }
+
+    /**
+     * Pull the server's catalog foods into the local Product table ("My Food"). One-way and
+     * add/update-only: a food we haven't seen inserts a Product; a food whose server `updated_at`
+     * has advanced overwrites its Product in place (server-authoritative — a server change replaces
+     * any in-app edit). The [SyncProductMappingEntity.serverUpdatedAt] guard means an unchanged food
+     * is skipped, so a routine sync neither rewrites the row nor churns it. There are no deletes.
+     * Returns how many products were inserted or updated. Per-item isolated so one bad food is
+     * skipped without aborting the phase (and the cursor still advances).
+     */
+    private suspend fun pullRemoteFoods(connection: SyncConnection, cursor: String?): Int {
+        val response = api.pullFoods(connection, cursor)
+        var applied = 0
+        for (dto in response.foods) {
+            isolate {
+                val existing = productMappingDao.getByUuid(dto.id)
+                val serverUpdatedAt = dto.updatedAt?.let { Instant.parse(it).epochSeconds } ?: 0L
+                when {
+                    existing == null -> {
+                        applyNewServerFood(dto, serverUpdatedAt)
+                        applied++
+                    }
+                    serverUpdatedAt > existing.serverUpdatedAt -> {
+                        transactionProvider.withTransaction {
+                            syncProductDao.update(mapper.toProductEntity(dto, existing.localProductId))
+                            productMappingDao.upsert(existing.copy(serverUpdatedAt = serverUpdatedAt))
+                        }
+                        applied++
+                    }
+                    // else: unchanged since last apply — nothing to do.
+                }
+            }
+        }
+        preferencesRepository.update { copy(foodsCursor = response.syncedAt) }
+        return applied
+    }
+
+    /** Insert a new server food as a local Product, atomically with its mapping. */
+    private suspend fun applyNewServerFood(dto: FoodDto, serverUpdatedAt: Long) {
+        transactionProvider.withTransaction {
+            val localId = syncProductDao.insert(mapper.toProductEntity(dto))
+            productMappingDao.upsert(SyncProductMappingEntity(dto.id, localId, serverUpdatedAt))
         }
     }
 

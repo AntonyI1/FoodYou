@@ -1,14 +1,17 @@
 package com.maksimowiczm.foodyou.sync.infrastructure
 
 import com.maksimowiczm.foodyou.common.domain.measurement.Measurement
+import com.maksimowiczm.foodyou.common.infrastructure.room.FoodSourceType
 import com.maksimowiczm.foodyou.common.infrastructure.room.Minerals
 import com.maksimowiczm.foodyou.common.infrastructure.room.Nutrients
 import com.maksimowiczm.foodyou.common.infrastructure.room.Vitamins
+import com.maksimowiczm.foodyou.food.infrastructure.room.ProductEntity
 import com.maksimowiczm.foodyou.fooddiary.domain.entity.DiaryEntry
 import com.maksimowiczm.foodyou.fooddiary.domain.entity.FoodDiaryEntry
 import com.maksimowiczm.foodyou.fooddiary.domain.entity.ManualDiaryEntry
 import com.maksimowiczm.foodyou.fooddiary.infrastructure.room.ManualDiaryEntryEntity
 import com.maksimowiczm.foodyou.goals.domain.entity.MacronutrientGoal
+import com.maksimowiczm.foodyou.sync.infrastructure.api.FoodDto
 import com.maksimowiczm.foodyou.sync.infrastructure.api.FoodEntryDto
 import com.maksimowiczm.foodyou.sync.infrastructure.api.GoalsDto
 import com.maksimowiczm.foodyou.sync.infrastructure.api.NutrientsDto
@@ -133,6 +136,51 @@ class SyncMapper(private val timeZone: TimeZone = TimeZone.currentSystemDefault(
                 quantity = QuantityDto(1.0, UNIT_SERVING),
             )
         )
+
+    /**
+     * Server catalog food -> a local Product ("My Food") row. [dto]'s per-100 g/ml nutrients map
+     * straight onto the product; vitamins and minerals stay empty (scope: no enrichment). Source is
+     * [FoodSourceType.User] — there is no dedicated "server" source and these behave as user foods.
+     * [localId] is 0 for an insert, or the existing Product id for an in-place update.
+     */
+    fun toProductEntity(dto: FoodDto, localId: Long = 0): ProductEntity {
+        val n = dto.per100g
+        return ProductEntity(
+            id = localId,
+            name = dto.name,
+            brand = dto.brand,
+            barcode = dto.barcode,
+            nutrients =
+                Nutrients(
+                    energy = n.kcal,
+                    proteins = n.proteinG,
+                    fats = n.fatG,
+                    saturatedFats = n.saturatedFatG,
+                    transFats = null,
+                    monounsaturatedFats = null,
+                    polyunsaturatedFats = null,
+                    omega3 = null,
+                    omega6 = null,
+                    carbohydrates = n.carbsG,
+                    sugars = n.sugarG,
+                    addedSugars = null,
+                    dietaryFiber = n.fiberG,
+                    solubleFiber = null,
+                    insolubleFiber = null,
+                    salt = n.saltG,
+                    cholesterolMilli = null,
+                    caffeineMilli = null,
+                ),
+            vitamins = EMPTY_VITAMINS,
+            minerals = EMPTY_MINERALS,
+            packageWeight = dto.packageWeightG,
+            servingWeight = dto.servingWeightG,
+            note = null,
+            sourceType = FoodSourceType.User,
+            sourceUrl = null,
+            isLiquid = dto.isLiquid,
+        )
+    }
 
     fun toGoalsDto(goal: MacronutrientGoal): GoalsDto =
         GoalsDto(
