@@ -23,8 +23,11 @@ import com.maksimowiczm.foodyou.sync.domain.SyncException
 import com.maksimowiczm.foodyou.sync.domain.SyncPreferences
 import com.maksimowiczm.foodyou.sync.domain.SyncResult
 import com.maksimowiczm.foodyou.sync.domain.SyncTokenRepository
+import com.maksimowiczm.foodyou.food.infrastructure.room.ProductEntity
 import com.maksimowiczm.foodyou.sync.infrastructure.api.EntriesResponseDto
+import com.maksimowiczm.foodyou.sync.infrastructure.api.FoodDto
 import com.maksimowiczm.foodyou.sync.infrastructure.api.FoodEntryDto
+import com.maksimowiczm.foodyou.sync.infrastructure.api.FoodsResponseDto
 import com.maksimowiczm.foodyou.sync.infrastructure.api.GoalsDto
 import com.maksimowiczm.foodyou.sync.infrastructure.api.NutrientsDto
 import com.maksimowiczm.foodyou.sync.infrastructure.api.QuantityDto
@@ -33,6 +36,9 @@ import com.maksimowiczm.foodyou.sync.infrastructure.api.SyncConnection
 import com.maksimowiczm.foodyou.sync.infrastructure.room.SyncEntryMappingDao
 import com.maksimowiczm.foodyou.sync.infrastructure.room.SyncEntryMappingEntity
 import com.maksimowiczm.foodyou.sync.infrastructure.room.SyncLocalRef
+import com.maksimowiczm.foodyou.sync.infrastructure.room.SyncProductDao
+import com.maksimowiczm.foodyou.sync.infrastructure.room.SyncProductMappingDao
+import com.maksimowiczm.foodyou.sync.infrastructure.room.SyncProductMappingEntity
 import com.maksimowiczm.foodyou.sync.infrastructure.room.SyncReadDao
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -395,12 +401,116 @@ class DefaultSyncEngineTest {
         assertTrue(env.api.setGoalsCalls.isEmpty(), "converged — no further goal calls")
     }
 
+    // ---- foods catalog pull ----
+
+    @Test
+    fun foods_pull_insertsNewProductAndMapping() = runBlocking {
+        val env = TestEnv()
+        env.api.seedFood(serverFood(id = "f1", name = "Rolled oats", kcal = 389.0, servingWeightG = 40.0))
+
+        val result = env.engine.sync()
+
+        val product = env.productDao.store.values.singleOrNull()
+        assertEquals("Rolled oats", product?.name)
+        assertEquals(389.0, product?.nutrients?.energy)
+        assertEquals(40.0, product?.servingWeight)
+        val mapping = env.productMappingDao.getByUuid("f1")
+        assertNotNull(mapping)
+        assertEquals(product?.id, mapping.localProductId)
+        assertEquals(1, (result as SyncResult.Success).productsPulled)
+    }
+
+    @Test
+    fun foods_pull_appliesRunInATransaction() = runBlocking {
+        val env = TestEnv() // default goals are separate-mode, so only the foods apply uses tx here
+        env.api.seedFood(serverFood(id = "f1", name = "Oats", kcal = 389.0))
+
+        env.engine.sync()
+
+        assertTrue(env.tx.used, "product insert + mapping must be wrapped in a transaction")
+    }
+
+    @Test
+    fun foods_pull_updatesProductWhenServerUpdatedAtAdvances() = runBlocking {
+        val env = TestEnv()
+        env.api.seedFood(serverFood(id = "f1", name = "Oats", kcal = 380.0, updatedAt = "2026-07-13T08:00:00Z"))
+        env.engine.sync()
+        val originalId = env.productMappingDao.getByUuid("f1")!!.localProductId
+
+        // Server food changes and its updated_at advances.
+        env.api.seedFood(serverFood(id = "f1", name = "Oats (updated)", kcal = 400.0, updatedAt = "2026-07-13T10:00:00Z"))
+        val result = env.engine.sync()
+
+        val product = env.productDao.store.values.single()
+        assertEquals(originalId, product.id, "updated in place, same local product id")
+        assertEquals("Oats (updated)", product.name)
+        assertEquals(400.0, product.nutrients.energy)
+        assertEquals(1, env.productDao.store.size, "no duplicate product created")
+        assertEquals(
+            Instant.parse("2026-07-13T10:00:00Z").epochSeconds,
+            env.productMappingDao.getByUuid("f1")!!.serverUpdatedAt,
+        )
+        assertEquals(1, (result as SyncResult.Success).productsPulled)
+    }
+
+    @Test
+    fun foods_pull_skipsUnchangedFood() = runBlocking {
+        val env = TestEnv()
+        env.api.seedFood(serverFood(id = "f1", name = "Oats", kcal = 389.0, updatedAt = "2026-07-13T08:00:00Z"))
+        env.engine.sync()
+
+        // Same food, same updated_at on the next sync -> nothing re-applied.
+        val result = env.engine.sync()
+
+        assertEquals(0, (result as SyncResult.Success).productsPulled, "unchanged food must not re-apply")
+        assertEquals(0, env.productDao.updates, "product must not be rewritten when unchanged")
+    }
+
+    @Test
+    fun foods_pull_persistsCursor() = runBlocking {
+        val env = TestEnv()
+        env.api.seedFood(serverFood(id = "f1", name = "Oats", kcal = 389.0))
+
+        env.engine.sync()
+
+        // Without persisting foodsCursor, every sync would re-pull the whole catalog.
+        assertEquals("2026-07-14T00:00:00Z", env.prefsRepo.value.foodsCursor)
+    }
+
+    @Test
+    fun foods_pull_badFoodSkipped_othersApplied() = runBlocking {
+        val env = TestEnv()
+        env.api.seedFood(serverFood(id = "bad", name = "X", kcal = 1.0).copy(updatedAt = "not-an-instant"))
+        env.api.seedFood(serverFood(id = "good", name = "Oats", kcal = 389.0))
+
+        env.engine.sync()
+
+        assertNotNull(env.productMappingDao.getByUuid("good"))
+        assertNull(env.productMappingDao.getByUuid("bad"))
+    }
+
+    @Test
+    fun foods_pull_stillHappensWhenPushFails() = runBlocking {
+        val env = TestEnv()
+        env.manualDao.seed(manualEntity(id = 10, mealId = 1, name = "Local", kcal = 1.0))
+        env.api.commitOnPush = false
+        env.api.pushError = { IllegalStateException("push down") }
+        env.api.seedFood(serverFood(id = "f1", name = "Oats", kcal = 389.0))
+
+        val result = env.engine.sync()
+
+        assertNotNull(env.productMappingDao.getByUuid("f1"), "foods pull still applied despite push failure")
+        assertTrue(result is SyncResult.Failure, "push error still reported")
+    }
+
     // ---- fakes & builders ----
 
     private class TestEnv(readTimeoutMs: Long = 5_000L) {
         val manualDao = FakeManualDao()
         val readDao = FakeReadDao(manualDao)
         val mappingDao = FakeMappingDao()
+        val productDao = FakeSyncProductDao()
+        val productMappingDao = FakeSyncProductMappingDao()
         val manualRepo = FakeManualRepo(manualDao)
         val foodRepo = FakeFoodRepo()
         val mealRepo = FakeMealRepo()
@@ -414,6 +524,8 @@ class DefaultSyncEngineTest {
             DefaultSyncEngine(
                 syncReadDao = readDao,
                 mappingDao = mappingDao,
+                productMappingDao = productMappingDao,
+                syncProductDao = productDao,
                 manualEntryRepository = manualRepo,
                 manualEntryDao = manualDao,
                 foodEntryRepository = foodRepo,
@@ -516,6 +628,35 @@ class DefaultSyncEngineTest {
         }
     }
 
+    private class FakeSyncProductDao : SyncProductDao {
+        val store = mutableMapOf<Long, ProductEntity>()
+        var updates = 0
+            private set
+
+        private var nextId = 500L
+
+        override suspend fun insert(product: ProductEntity): Long {
+            val id = if (product.id != 0L) product.id else nextId++
+            store[id] = product.copy(id = id)
+            return id
+        }
+
+        override suspend fun update(product: ProductEntity) {
+            updates++
+            store[product.id] = product
+        }
+    }
+
+    private class FakeSyncProductMappingDao : SyncProductMappingDao {
+        private val byUuid = mutableMapOf<String, SyncProductMappingEntity>()
+
+        override suspend fun getByUuid(uuid: String) = byUuid[uuid]
+
+        override suspend fun upsert(mapping: SyncProductMappingEntity) {
+            byUuid[mapping.uuid] = mapping
+        }
+    }
+
     private class FakeFoodRepo : FoodDiaryEntryRepository {
         val deleted = mutableListOf<Long>()
         var hangingIds: Set<Long> = emptySet()
@@ -578,6 +719,7 @@ class DefaultSyncEngineTest {
 
     private class FakeSyncApi : SyncApi {
         private val server = mutableMapOf<String, FoodEntryDto>()
+        private val serverFoods = mutableMapOf<String, FoodDto>()
         private val pushedEntries = mutableListOf<FoodEntryDto>()
         val setGoalsCalls = mutableListOf<GoalsDto>()
         var serverGoals: GoalsDto? = null
@@ -587,6 +729,11 @@ class DefaultSyncEngineTest {
 
         fun seedServer(dto: FoodEntryDto) {
             server[dto.id!!] = dto
+        }
+
+        // Re-seeding the same id replaces it, so a test can simulate a server-side food change.
+        fun seedFood(dto: FoodDto) {
+            serverFoods[dto.id] = dto
         }
 
         fun tombstone(uuid: String) {
@@ -603,6 +750,9 @@ class DefaultSyncEngineTest {
 
         override suspend fun pull(connection: SyncConnection, updatedSince: String?) =
             EntriesResponseDto(server.values.toList(), "2026-07-14T00:00:00Z")
+
+        override suspend fun pullFoods(connection: SyncConnection, updatedSince: String?) =
+            FoodsResponseDto(serverFoods.values.toList(), "2026-07-14T00:00:00Z")
 
         override suspend fun push(connection: SyncConnection, entries: List<FoodEntryDto>) {
             pushedEntries += entries
@@ -680,6 +830,23 @@ private fun manualEntity(id: Long, mealId: Long, name: String, kcal: Double): Ma
             mealId = mealId,
             localId = id,
         )
+
+private fun serverFood(
+    id: String,
+    name: String,
+    kcal: Double,
+    updatedAt: String = "2026-07-13T08:00:00Z",
+    servingWeightG: Double? = null,
+): FoodDto =
+    FoodDto(
+        id = id,
+        name = name,
+        per100g = NutrientsDto(kcal = kcal, proteinG = 5.0),
+        servingWeightG = servingWeightG,
+        isLiquid = false,
+        createdAt = "2026-07-13T08:00:00Z",
+        updatedAt = updatedAt,
+    )
 
 private fun serverEntry(uuid: String, meal: String, name: String): FoodEntryDto =
     FoodEntryDto(

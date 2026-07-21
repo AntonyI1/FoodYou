@@ -55,11 +55,15 @@ val syncModule = module {
 
     factory { syncDatabase.syncEntryMappingDao }
     factory { syncDatabase.syncReadDao }
+    factory { syncDatabase.syncProductMappingDao }
+    factory { syncDatabase.syncProductDao }
 
     factory<SyncEngine> {
         DefaultSyncEngine(
             syncReadDao = get(),
             mappingDao = get(),
+            productMappingDao = get(),
+            syncProductDao = get(),
             manualEntryRepository = get(),
             manualEntryDao = get(),
             foodEntryRepository = get(),

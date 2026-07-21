@@ -49,6 +49,32 @@ data class EntriesResponseDto(
 @Serializable data class BulkEntriesDto(val entries: List<FoodEntryDto>)
 
 /**
+ * Wire model for a server catalog food ("My Food"), `GET /api/v1/foods`. Nutrients are PER 100 g/ml
+ * (not totals). Foods sync is add/update-only — the server sends no tombstones, so there is no
+ * `deleted` field.
+ */
+@Serializable
+data class FoodDto(
+    val id: String,
+    val name: String,
+    val brand: String? = null,
+    val barcode: String? = null,
+    @SerialName("per_100g") val per100g: NutrientsDto,
+    @SerialName("serving_weight_g") val servingWeightG: Double? = null,
+    @SerialName("package_weight_g") val packageWeightG: Double? = null,
+    @SerialName("is_liquid") val isLiquid: Boolean = false,
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
+)
+
+/** Response of the foods sync pull: `GET /api/v1/foods?updated_since`. */
+@Serializable
+data class FoodsResponseDto(
+    val foods: List<FoodDto>,
+    @SerialName("synced_at") val syncedAt: String,
+)
+
+/**
  * Daily goals (single row), `GET/PUT /api/v1/goals`. All fields are nullable: the server returns
  * null for unset targets and set_goals is merge-semantics server-side, so partial rows are normal.
  */

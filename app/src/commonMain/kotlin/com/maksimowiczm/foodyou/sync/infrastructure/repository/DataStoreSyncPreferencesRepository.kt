@@ -19,6 +19,7 @@ internal class DataStoreSyncPreferencesRepository(dataStore: DataStore<Preferenc
             serverUrl = this[Keys.ServerUrl] ?: "",
             enabled = this[Keys.Enabled] ?: false,
             cursor = this[Keys.Cursor],
+            foodsCursor = this[Keys.FoodsCursor],
             lastSyncEpochSeconds = this[Keys.LastSync],
             lastError = this[Keys.LastError],
             goalKcal = this[Keys.GoalKcal],
@@ -31,6 +32,7 @@ internal class DataStoreSyncPreferencesRepository(dataStore: DataStore<Preferenc
         this[Keys.ServerUrl] = updated.serverUrl
         this[Keys.Enabled] = updated.enabled
         this[Keys.Cursor] = updated.cursor
+        this[Keys.FoodsCursor] = updated.foodsCursor
         this[Keys.LastSync] = updated.lastSyncEpochSeconds
         this[Keys.LastError] = updated.lastError
         this[Keys.GoalKcal] = updated.goalKcal
@@ -43,6 +45,7 @@ internal class DataStoreSyncPreferencesRepository(dataStore: DataStore<Preferenc
         val ServerUrl = stringPreferencesKey("sync:server_url")
         val Enabled = booleanPreferencesKey("sync:enabled")
         val Cursor = stringPreferencesKey("sync:cursor")
+        val FoodsCursor = stringPreferencesKey("sync:foods_cursor")
         val LastSync = longPreferencesKey("sync:last_sync_epoch")
         val LastError = stringPreferencesKey("sync:last_error")
         val GoalKcal = doublePreferencesKey("sync:goal_kcal")

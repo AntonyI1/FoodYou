@@ -40,6 +40,19 @@ internal class KtorSyncApi(
             .checked()
             .body()
 
+    // Add/update only, so no include_deleted (unlike the entries pull).
+    override suspend fun pullFoods(
+        connection: SyncConnection,
+        updatedSince: String?,
+    ): FoodsResponseDto =
+        client
+            .get(url(connection, "foods")) {
+                common(connection)
+                updatedSince?.let { parameter("updated_since", it) }
+            }
+            .checked()
+            .body()
+
     override suspend fun push(connection: SyncConnection, entries: List<FoodEntryDto>) {
         client
             .post(url(connection, "entries")) {
