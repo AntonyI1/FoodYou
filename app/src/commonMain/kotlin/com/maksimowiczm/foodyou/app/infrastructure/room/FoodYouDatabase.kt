@@ -46,6 +46,7 @@ import com.maksimowiczm.foodyou.sponsorship.infrastructure.room.SponsorshipDatab
 import com.maksimowiczm.foodyou.sponsorship.infrastructure.room.SponsorshipEntity
 import com.maksimowiczm.foodyou.sync.infrastructure.room.SyncDatabase
 import com.maksimowiczm.foodyou.sync.infrastructure.room.SyncEntryMappingEntity
+import com.maksimowiczm.foodyou.sync.infrastructure.room.SyncProductMappingEntity
 
 @Database(
     entities =
@@ -66,6 +67,7 @@ import com.maksimowiczm.foodyou.sync.infrastructure.room.SyncEntryMappingEntity
             MeasurementSuggestionEntity::class,
             ManualDiaryEntryEntity::class,
             SyncEntryMappingEntity::class,
+            SyncProductMappingEntity::class,
             ProductFts::class,
             RecipeFts::class,
         ],
@@ -115,6 +117,7 @@ import com.maksimowiczm.foodyou.sync.infrastructure.room.SyncEntryMappingEntity
             AutoMigration(from = 28, to = 29), // Add ManualDiaryEntryEntity
             AutoMigration(from = 29, to = 30), // Add MeasurementSuggestion indices
             AutoMigration(from = 32, to = 33), // Add SyncEntryMappingEntity for self-hosted sync
+            AutoMigration(from = 33, to = 34), // Add SyncProductMappingEntity for foods catalog sync
             /** @see [FoodSearchFtsMigration] Add FTS tables for ProductEntity and RecipeEntity */
             /**
              * @see [FoodSearchFtsCyrillicMigration] Add Cyrillic tokenizer support to FTS tables
@@ -144,7 +147,7 @@ abstract class FoodYouDatabase :
         }
 
     companion object {
-        const val VERSION = 33
+        const val VERSION = 34
 
         private val migrations: List<Migration> =
             listOf(
