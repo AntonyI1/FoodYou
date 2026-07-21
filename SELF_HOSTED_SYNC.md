@@ -11,7 +11,8 @@ settings screen — the branch stays rebasable on upstream. Upstream's own featu
 
 - **One-way toward your server.** The app only ever contacts the server URL you configure. No AI
   SDKs, no GMS/FCM, no push — background sync is WorkManager polling only (GrapheneOS-friendly).
-- **Scope:** diary entries and daily goals. Recipes and the custom-food library are **not** synced.
+- **Scope:** diary entries, daily goals, and a one-way **foods catalog** into "My Food" (see
+  below). Recipes are **not** synced, and the foods catalog is one-way only (server → app).
 
 ## Setup
 
@@ -50,6 +51,25 @@ fiber, sugar, saturated fat, salt). The fork maps between that and Food You's mo
   server already has goals set (e.g. Claude configured them) the server's win; otherwise the app
   seeds the server with its own.
 
+## My Food / products (foods catalog)
+
+Foods that Claude logs (in grams or millilitres) or saves on the server also appear in the app's
+**My Food** list, so you can add them to meals by hand later. This is a **one-way, add/update-only**
+pull (server → app):
+
+- The app pulls `GET /api/v1/foods` and materializes each server food as a local **Product** (source
+  *User*), keyed by the server food's UUID in a `SyncProductMapping` table (mirroring the entry
+  mapping). Nutrition is stored **per 100 g/ml**; serving/package weights and the liquid flag carry
+  over. Vitamins and minerals are left empty — the server doesn't track them.
+- **Server-authoritative.** A synced product is only rewritten when the server food changes (its
+  `updated_at` advances), so routine syncs don't churn it. If you edit a synced product in the app
+  and the server food later changes, the server copy wins and overwrites your edit — this is by
+  design (foods are one-way; the app never pushes product changes back).
+- **No deletes.** There is no way to delete a catalog food from the server in v1, so nothing is ever
+  removed from My Food by sync. Products you create in the app are never pushed to the server.
+- **Dedupe is by the server's UUID**, not by name. A product you already created in the app by hand
+  is independent of a same-named food pulled from the server — they can coexist as two entries.
+
 ### v1 limitation (by design)
 
 A manual/Claude entry can only store name + date + the eight nutrient totals + meal — it cannot hold
@@ -68,10 +88,11 @@ the app copy is unchanged. Server-side **deletes** of these entries *are* honore
 > JDK 17 toolchain fails with `invalid source release: 21`. Upstream's dev flake uses Temurin 21;
 > use the same. The Android SDK must have `platforms;android-36` and `build-tools;36.0.0`.
 
-> **One-way-door warning.** This build ships **Room schema v33**. Once the app has migrated its
-> database to v33, an older upstream build (v32) **cannot open it** and will crash-loop on launch.
-> If you ever want to go back to upstream, back up and clear the app's data first (Settings → Apps →
-> Food You → Storage), or export your diary beforehand.
+> **One-way-door warning.** This build ships **Room schema v34** (v33 added `SyncEntryMapping`; v34
+> adds `SyncProductMapping` for the foods catalog). Once the app has migrated its database to v34, an
+> older build (v33, or upstream v32) **cannot open it** and will crash-loop on launch. If you ever
+> want to go back, back up and clear the app's data first (Settings → Apps → Food You → Storage), or
+> export your diary beforehand.
 
 Debug build (unsigned, for testing):
 
@@ -106,9 +127,10 @@ Play Services.
 ## Tests
 
 - Host JVM unit tests (`./gradlew :app:testDebugUnitTest`): `SyncMapperTest` (mapping, units, goals,
-  loop-closure hash), `DefaultSyncEngineTest` (push/pull/LWW/tombstones/loop-closure/ruling-A/goals/
-  uuid-reservation/fault-isolation via fakes), `KtorSyncApiTest` (Ktor MockEngine, typed errors),
+  loop-closure hash, foods → Product), `DefaultSyncEngineTest` (push/pull/LWW/tombstones/loop-closure/
+  ruling-A/goals/uuid-reservation/fault-isolation **and foods pull: insert/update-guard/transaction/
+  isolation/cursor** via fakes), `KtorSyncApiTest` (Ktor MockEngine, typed errors, foods pull),
   `SyncRunnerTest` (status + concurrency skip).
-- `SyncMappingMigrationTest` validates the v32→v33 auto-migration via `MigrationTestHelper`; it is
-  instrumented (needs a device/emulator), so run it with `./gradlew :app:connectedDebugAndroidTest`,
-  not the host suite.
+- `SyncMappingMigrationTest` (v32→v33) and `SyncProductMappingMigrationTest` (v33→v34) validate the
+  additive auto-migrations via `MigrationTestHelper`; they are instrumented (need a device/emulator),
+  so run them with `./gradlew :app:connectedDebugAndroidTest`, not the host suite.
